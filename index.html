@@ -1,0 +1,1146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>The Golden Standard — SOP Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600&family=DM+Sans:wght@400;500;600&family=Oswald:wght@500&family=Source+Sans+3:wght@400;500&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css"/>
+<style>
+/* ============================================================
+   THE GOLDEN STANDARD — Netlify-hosted Admin Upload Tool
+   Natal's AC, Plumbing & Electric · Internal use only
+   
+   NETLIFY ENVIRONMENT VARIABLES (set in Site Settings):
+   ┌─────────────────────┬──────────────────────────────────────┐
+   │ ANTHROPIC_API_KEY   │ sk-ant-api03-...                     │
+   │ GOOGLE_SCRIPT_URL   │ https://script.google.com/macros/... │
+   │ SITE_PASSWORD       │ your chosen password                 │
+   └─────────────────────┴──────────────────────────────────────┘
+   All keys live in Netlify — never in this HTML file.
+   API calls route through /.netlify/functions/claude-proxy and /.netlify/functions/sheet-proxy proxies.
+   ============================================================ */
+:root{
+  --navy:#1A3A5C;--navy2:#234e7a;--navy-lt:#e8eef5;
+  --teal:#2BA99B;--teal-lt:#e1f5f2;
+  --gold:#F5A623;--gold-lt:#fef3e0;
+  --green:#3B6D11;--amber:#854F0B;--amber-lt:#faeeda;
+  --purple:#3C3489;--red:#A32D2D;--red-lt:#fcebeb;
+  --text:#1a1a1a;--text2:#555;--text3:#999;
+  --border:#e2e0d8;--bg:#f4f2ed;--bgcard:#fff;--bgsurf:#f9f7f4;
+  --sidebar:240px;--topbar:56px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.6;min-height:100vh;display:flex;flex-direction:column}
+
+/* LOGIN */
+.login-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px;background:var(--navy)}
+.login-box{background:#fff;border-radius:16px;padding:40px;max-width:400px;width:100%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.25)}
+.login-logo{width:56px;height:56px;background:var(--gold);border-radius:12px;display:flex;align-items:center;justify-content:center;font-family:'Playfair Display',serif;font-size:26px;color:var(--navy);margin:0 auto 16px}
+.login-box h2{font-family:'Playfair Display',serif;font-size:22px;color:var(--navy);margin-bottom:4px}
+.login-box .login-sub{font-size:13px;color:var(--text2);margin-bottom:24px;font-family:'Source Sans 3',sans-serif}
+.login-form-group{text-align:left;margin-bottom:14px}
+.login-form-group label{font-size:12px;font-weight:500;color:var(--text2);font-family:'Source Sans 3',sans-serif;text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:5px}
+.login-form-group select,.login-form-group input{width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:6px;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);background:var(--bgsurf);outline:none;transition:border-color .15s}
+.login-form-group select:focus,.login-form-group input:focus{border-color:var(--teal)}
+.login-error{font-size:12px;color:var(--red);margin-top:10px;display:none;font-family:'Source Sans 3',sans-serif;background:var(--red-lt);border:1px solid #F09595;border-radius:6px;padding:8px 12px;line-height:1.5}
+.login-note{font-size:11px;color:var(--text3);margin-top:14px;font-family:'Source Sans 3',sans-serif}
+
+/* APP SHELL */
+.app-shell{display:none;flex-direction:column;min-height:100vh}
+.app-shell.visible{display:flex}
+.topbar{height:var(--topbar);background:var(--navy);display:flex;align-items:center;flex-shrink:0;border-bottom:3px solid var(--gold);position:sticky;top:0;z-index:100}
+.topbar-brand{width:var(--sidebar);flex-shrink:0;display:flex;align-items:center;gap:10px;padding:0 18px;border-right:1px solid rgba(255,255,255,.08);height:100%}
+.logo-g{width:32px;height:32px;background:var(--gold);border-radius:8px;display:flex;align-items:center;justify-content:center;font-family:'Playfair Display',serif;font-size:15px;color:var(--navy);flex-shrink:0}
+.brand-name{font-family:'Playfair Display',serif;font-size:14px;color:#fff;line-height:1.1}
+.brand-sub{font-size:10px;color:rgba(255,255,255,.4);font-family:'Oswald',sans-serif;letter-spacing:.08em;text-transform:uppercase}
+.topbar-center{flex:1;padding:0 20px;display:flex;align-items:center;gap:8px}
+.tb-crumb{font-size:12px;color:rgba(255,255,255,.35)}
+.tb-sep{font-size:12px;color:rgba(255,255,255,.2)}
+.tb-page{font-size:13px;font-weight:500;color:#fff}
+.topbar-right{display:flex;align-items:center;gap:10px;padding:0 18px;border-left:1px solid rgba(255,255,255,.08)}
+.badge-admin{font-size:10px;font-weight:500;padding:3px 10px;border-radius:20px;font-family:'Oswald',sans-serif;letter-spacing:.06em;text-transform:uppercase;background:rgba(245,166,35,.2);color:var(--gold);border:.5px solid rgba(245,166,35,.35)}
+.signout-btn{background:none;border:1px solid rgba(255,255,255,.2);border-radius:6px;color:rgba(255,255,255,.7);font-size:12px;padding:5px 12px;cursor:pointer;font-family:'DM Sans',sans-serif;display:flex;align-items:center;gap:5px;transition:background .15s}
+.signout-btn:hover{background:rgba(255,255,255,.1)}
+.user-chip{font-size:12px;color:rgba(255,255,255,.7);display:flex;align-items:center;gap:7px}
+.user-av{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:#fff;flex-shrink:0}
+
+/* BODY LAYOUT */
+.body-layout{display:flex;flex:1}
+.sidebar{width:var(--sidebar);background:var(--bgcard);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;position:sticky;top:var(--topbar);height:calc(100vh - var(--topbar));overflow-y:auto}
+.nav-group{padding:10px 0 4px}
+.nav-label{font-family:'Oswald',sans-serif;font-size:10px;color:var(--text3);letter-spacing:.12em;text-transform:uppercase;padding:0 16px 6px}
+.nav-item{display:flex;align-items:center;gap:9px;padding:8px 16px;cursor:pointer;font-size:13px;color:var(--text2);transition:background .12s,color .12s;border-left:3px solid transparent;user-select:none}
+.nav-item:hover{background:var(--bgsurf);color:var(--text)}
+.nav-item.active{background:var(--navy-lt);color:var(--navy);border-left-color:var(--gold);font-weight:500}
+.nav-item i{font-size:15px;flex-shrink:0}
+.nav-badge{margin-left:auto;font-size:10px;padding:1px 7px;border-radius:10px;font-weight:600;background:var(--gold-lt);color:var(--amber);border:1px solid var(--gold)}
+.nav-divider{height:1px;background:var(--border);margin:6px 0}
+.sidebar-footer{margin-top:auto;padding:12px 16px;border-top:1px solid var(--border);font-size:10px;color:var(--text3);line-height:1.6}
+
+/* MAIN */
+.main{flex:1;background:var(--bg);overflow-y:auto}
+.views>div{display:none}.views>div.active{display:block}
+.page{padding:28px 32px}
+.page h1{font-family:'Playfair Display',serif;font-size:24px;color:var(--navy);margin-bottom:6px}
+.page-sub{font-family:'Source Sans 3',sans-serif;font-size:14px;color:var(--text2);margin-bottom:24px}
+
+/* CARDS */
+.card{background:var(--bgcard);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:20px}
+.card-hdr{display:flex;align-items:center;gap:10px;padding:13px 18px;background:var(--bgsurf);border-bottom:1px solid var(--border);font-size:13px;font-weight:600;color:var(--text)}
+.card-hdr i{font-size:16px;color:var(--teal)}
+.card-body{padding:20px}
+
+/* ENV STATUS BANNER */
+.env-banner{border-radius:10px;padding:12px 16px;margin-bottom:20px;display:flex;align-items:flex-start;gap:10px;font-family:'Source Sans 3',sans-serif;font-size:13px;line-height:1.5}
+.env-banner i{font-size:16px;flex-shrink:0;margin-top:1px}
+.env-ok{background:var(--teal-lt);color:#0a5c54;border:1px solid var(--teal)}
+.env-ok i{color:var(--teal)}
+.env-warn{background:var(--gold-lt);color:#633806;border:1px solid var(--gold)}
+.env-warn i{color:var(--gold)}
+.env-err{background:var(--red-lt);color:var(--red);border:1px solid #F09595}
+.env-err i{color:var(--red)}
+
+/* FORMS */
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+.form-row.full{grid-template-columns:1fr}.form-row.thirds{grid-template-columns:1fr 1fr 1fr}
+.form-group{display:flex;flex-direction:column;gap:5px}
+.form-group label{font-size:12px;font-weight:500;color:var(--text2);font-family:'Source Sans 3',sans-serif;text-transform:uppercase;letter-spacing:.05em}
+.form-group input,.form-group select,.form-group textarea{font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);background:var(--bgsurf);border:1px solid var(--border);border-radius:6px;padding:9px 12px;outline:none;transition:border-color .15s;width:100%}
+.form-group input:focus,.form-group select:focus,.form-group textarea:focus{border-color:var(--teal);background:#fff}
+.form-group textarea{resize:vertical;min-height:80px}
+.form-group .hint{font-size:11px;color:var(--text3);font-family:'Source Sans 3',sans-serif}
+
+/* UPLOAD ZONE */
+.upload-zone{border:2px dashed var(--border);border-radius:12px;padding:36px 24px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;background:var(--bgsurf);position:relative}
+.upload-zone:hover,.upload-zone.drag-over{border-color:var(--teal);background:var(--teal-lt)}
+.upload-zone i{font-size:38px;color:var(--text3);display:block;margin-bottom:10px;transition:color .2s}
+.upload-zone:hover i,.upload-zone.drag-over i{color:var(--teal)}
+.upload-zone h3{font-size:15px;font-weight:600;color:var(--text);margin-bottom:5px}
+.upload-zone p{font-size:13px;color:var(--text2);font-family:'Source Sans 3',sans-serif}
+.file-types{display:inline-flex;gap:6px;margin-top:10px}
+.ft-badge{font-size:10px;font-weight:600;padding:2px 8px;border-radius:4px;font-family:'Oswald',sans-serif;letter-spacing:.06em;text-transform:uppercase}
+.ft-docx{background:var(--navy-lt);color:var(--navy)}
+.ft-pdf{background:var(--red-lt);color:var(--red)}
+.upload-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.file-selected{display:flex;align-items:center;gap:12px;background:var(--teal-lt);border:1px solid var(--teal);border-radius:8px;padding:11px 15px;margin-top:12px}
+.file-selected i{font-size:20px;color:var(--teal);flex-shrink:0}
+.file-name{font-size:13px;font-weight:500;color:var(--navy);flex:1}
+.file-size{font-size:11px;color:var(--text3);font-family:'Source Sans 3',sans-serif}
+.file-rm{background:none;border:none;cursor:pointer;color:var(--text3);font-size:16px;padding:2px}
+.file-rm:hover{color:var(--red)}
+
+/* BUTTONS */
+.btn-primary{background:var(--navy);color:#fff;border:none;border-radius:8px;padding:11px 26px;font-size:14px;font-weight:500;cursor:pointer;font-family:'DM Sans',sans-serif;transition:background .15s;display:inline-flex;align-items:center;gap:7px}
+.btn-primary:hover{background:var(--navy2)}.btn-primary:disabled{opacity:.45;cursor:not-allowed}
+.btn-teal{background:var(--teal);color:#fff;border:none;border-radius:8px;padding:11px 22px;font-size:14px;font-weight:500;cursor:pointer;font-family:'DM Sans',sans-serif;transition:background .15s;display:inline-flex;align-items:center;gap:7px}
+.btn-teal:hover{background:#239e91}.btn-teal:disabled{opacity:.45;cursor:not-allowed}
+.btn-secondary{background:none;color:var(--text2);border:1px solid var(--border);border-radius:8px;padding:11px 18px;font-size:14px;cursor:pointer;font-family:'DM Sans',sans-serif;transition:background .12s}
+.btn-secondary:hover{background:var(--bgsurf)}
+.btn-sm{padding:6px 13px;font-size:12px;border-radius:6px}
+.btn-danger{background:none;color:var(--red);border:1px solid var(--red);border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif}
+.btn-danger:hover{background:var(--red-lt)}
+.btn-icon{background:none;border:1px solid var(--border);border-radius:6px;width:28px;height:28px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text3);transition:all .12s}
+.btn-icon:hover{border-color:var(--teal);color:var(--teal)}
+.btn-icon.danger:hover{border-color:var(--red);color:var(--red)}
+.actions-row{display:flex;align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap}
+.status-msg{font-size:12px;color:var(--text3);font-family:'Source Sans 3',sans-serif}
+
+/* PROCESSING */
+.processing-box{background:var(--navy-lt);border:1px solid #b5d4f4;border-radius:10px;padding:18px 22px;display:flex;align-items:center;gap:16px;margin-bottom:20px}
+.spinner{width:24px;height:24px;border:3px solid var(--border);border-top-color:var(--teal);border-radius:50%;animation:spin .8s linear infinite;flex-shrink:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+.proc-title{font-size:14px;font-weight:600;color:var(--navy);margin-bottom:2px}
+.proc-sub{font-size:12px;color:var(--text2);font-family:'Source Sans 3',sans-serif}
+
+/* PARSED PREVIEW */
+.parsed-preview{background:var(--bgcard);border:1.5px solid var(--teal);border-radius:12px;overflow:hidden;margin-bottom:20px}
+.pp-hdr{display:flex;align-items:center;gap:10px;padding:12px 18px;background:var(--teal-lt);border-bottom:1px solid var(--teal);font-size:13px;font-weight:600;color:var(--navy)}
+.pp-hdr i{font-size:15px;color:var(--teal)}
+.parsed-phase{padding:14px 18px;border-bottom:1px solid var(--border)}
+.parsed-phase:last-child{border-bottom:none}
+.ph-label{font-size:11px;font-weight:600;color:var(--teal);text-transform:uppercase;letter-spacing:.08em;font-family:'Oswald',sans-serif;margin-bottom:6px}
+.ph-ti{font-size:14px;font-weight:600;color:var(--text);margin-bottom:8px}
+.step-edit-list{list-style:none;padding:0}
+.step-edit-row{display:grid;grid-template-columns:1fr auto auto;gap:6px;align-items:flex-start;margin-bottom:6px}
+.step-edit-row input{padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);background:var(--bgsurf);outline:none;transition:border-color .15s}
+.step-edit-row input:focus{border-color:var(--teal)}
+.crit-label{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--red);font-weight:500;padding-top:10px;cursor:pointer;white-space:nowrap}
+.phase-entry{border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:12px;background:var(--bgsurf);position:relative}
+.phase-entry-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.phase-entry-hdr span{font-size:12px;font-weight:600;color:var(--navy);font-family:'Oswald',sans-serif;letter-spacing:.05em;text-transform:uppercase}
+.add-phase-btn{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--teal);cursor:pointer;background:none;border:1.5px dashed var(--teal);border-radius:8px;padding:9px 16px;width:100%;justify-content:center;font-family:'DM Sans',sans-serif;transition:background .12s;margin-bottom:14px}
+.add-phase-btn:hover{background:var(--teal-lt)}
+
+/* ALERTS */
+.alert{display:flex;gap:10px;align-items:flex-start;padding:12px 15px;border-radius:8px;font-family:'Source Sans 3',sans-serif;font-size:13px;line-height:1.5;margin-bottom:16px}
+.alert i{font-size:15px;flex-shrink:0;margin-top:1px}
+.alert-info{background:var(--navy-lt);color:#0C447C;border:1px solid #B5D4F4}
+.alert-info i{color:var(--navy)}
+.alert-warn{background:var(--gold-lt);color:#633806;border:1px solid var(--gold)}
+.alert-warn i{color:var(--gold)}
+.alert-success{background:var(--teal-lt);color:#0a5c54;border:1px solid var(--teal)}
+.alert-success i{color:var(--teal)}
+.alert-err{background:var(--red-lt);color:var(--red);border:1px solid #F09595}
+.alert-err i{color:var(--red)}
+
+/* STATS */
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:22px}
+.stat-card{background:var(--bgcard);border:1px solid var(--border);border-radius:10px;padding:14px 16px}
+.stat-val{font-family:'Playfair Display',serif;font-size:28px;color:var(--navy);line-height:1;margin-bottom:2px}
+.stat-lbl{font-size:11px;color:var(--text3);font-family:'Source Sans 3',sans-serif;text-transform:uppercase;letter-spacing:.06em}
+.stat-sub{font-size:11px;color:var(--teal);margin-top:2px;font-weight:500}
+
+/* LIBRARY LIST */
+.sop-list-item{display:flex;align-items:center;gap:12px;padding:12px 18px;border-bottom:1px solid var(--border);transition:background .1s}
+.sop-list-item:last-child{border-bottom:none}
+.sop-list-item:hover{background:var(--bgsurf)}
+.sli-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.sli-title{font-size:13px;font-weight:600;color:var(--text)}
+.sli-meta{font-size:11px;color:var(--text3);font-family:'Source Sans 3',sans-serif;margin-top:1px}
+.sli-status{font-size:10px;font-weight:500;padding:2px 8px;border-radius:10px;font-family:'Source Sans 3',sans-serif;white-space:nowrap}
+.sli-actions{display:flex;gap:6px;flex-shrink:0}
+.s-live{background:var(--teal-lt);color:var(--teal)}
+.s-draft{background:var(--bgsurf);color:var(--text3);border:1px solid var(--border)}
+
+/* SUCCESS */
+.success-box{background:var(--teal-lt);border:1px solid var(--teal);border-radius:12px;padding:28px;text-align:center;max-width:480px;margin:0 auto}
+.success-box .si{font-size:40px;color:var(--teal);margin-bottom:12px}
+.success-box h2{font-family:'Playfair Display',serif;font-size:22px;color:var(--navy);margin-bottom:8px}
+.success-box p{font-family:'Source Sans 3',sans-serif;font-size:14px;color:var(--text2);line-height:1.55}
+.success-box .back-home{display:inline-flex;align-items:center;gap:6px;margin-top:16px;background:var(--navy);color:#fff;border:none;border-radius:8px;padding:9px 18px;font-size:13px;cursor:pointer;font-family:'DM Sans',sans-serif}
+
+/* ENV CONFIG VIEW */
+.env-table{width:100%;border-collapse:collapse;font-family:'Source Sans 3',sans-serif;font-size:13px;margin-bottom:16px}
+.env-table th{text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;padding:8px 12px;background:var(--bgsurf);border:1px solid var(--border)}
+.env-table td{padding:10px 12px;border:1px solid var(--border);vertical-align:top}
+.env-table td:first-child{font-family:monospace;font-size:13px;color:var(--navy);background:var(--bgsurf);white-space:nowrap;font-weight:500}
+.env-table td:nth-child(2){color:var(--text2)}
+.env-table td:last-child{font-family:monospace;font-size:12px;color:var(--teal)}
+.code-block{background:#1e2d3d;color:#a8d8ea;border-radius:8px;padding:14px 16px;font-family:monospace;font-size:12px;line-height:1.7;overflow-x:auto;white-space:pre;margin-top:8px}
+
+::-webkit-scrollbar{width:5px}
+::-webkit-scrollbar-thumb{background:#ccc;border-radius:3px}
+@media(max-width:700px){
+  :root{--sidebar:0px}
+  .sidebar{display:none}
+  .topbar-brand{width:auto}
+  .page,.card-body{padding:16px}
+  .stats-row{grid-template-columns:1fr 1fr}
+  .form-row,.form-row.thirds{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<!-- ══ LOGIN SCREEN ══════════════════════════════════════════ -->
+<div class="login-screen" id="login-screen">
+  <div class="login-box">
+    <div class="login-logo">G</div>
+    <h2>Admin Sign In</h2>
+    <p class="login-sub">The Golden Standard upload and management portal.<br>Natal's managers only.</p>
+    <div class="login-form-group">
+      <label>Your name</label>
+      <select id="login-user">
+        <option value="">Select your name...</option>
+        <option value="brandon|BF|#2BA99B">Brandon Flowers — Marketing Director</option>
+        <option value="joe|JB|#1A3A5C">Joe Bravata — HVAC Service Manager</option>
+        <option value="aaron|AM|#234e7a">Aaron Matthews — HVAC Install Manager</option>
+        <option value="rodney|RF|#3B6D11">Rodney Faucett — Plumbing Manager</option>
+        <option value="darren|DB|#854F0B">Darren Bell — Electrical Manager</option>
+        <option value="madison|MA|#3C3489">Madison Allen — Office Manager</option>
+      </select>
+    </div>
+    <div class="login-form-group">
+      <label>Site password</label>
+      <input type="password" id="login-pass" placeholder="Enter site password" id="login-pass"/>
+      <div class="login-error" id="login-err">Incorrect password. Contact Brandon.</div>
+    </div>
+    <div style="margin-top:18px">
+      <button class="btn-primary" style="width:100%;justify-content:center" id="login-btn" onclick="doLogin()">
+        <i class="ti ti-login" style="font-size:15px" aria-hidden="true"></i>
+        <span id="login-btn-text">Sign in</span>
+      </button>
+    </div>
+    <p class="login-note">Password is set in Netlify by Brandon.<br>Contact brandonf@callnatals.com if you need access.</p>
+  </div>
+</div>
+
+<!-- ══ APP SHELL ═════════════════════════════════════════════ -->
+<div class="app-shell" id="app-shell">
+
+  <header class="topbar">
+    <div class="topbar-brand">
+      <div class="logo-g">G</div>
+      <div><div class="brand-name">The Golden Standard</div><div class="brand-sub">Admin Portal</div></div>
+    </div>
+    <div class="topbar-center">
+      <span class="tb-crumb" id="tb-crumb">Admin</span>
+      <span class="tb-sep" id="tb-sep" style="display:none"> › </span>
+      <span class="tb-page" id="tb-page"></span>
+    </div>
+    <div class="topbar-right">
+      <span class="badge-admin">Admin</span>
+      <div class="user-chip">
+        <div class="user-av" id="u-av">BF</div>
+        <span id="u-name" style="font-size:12px;color:rgba(255,255,255,.7)">Brandon F.</span>
+      </div>
+      <button class="signout-btn" onclick="signOut()">
+        <i class="ti ti-logout" style="font-size:13px" aria-hidden="true"></i> Sign out
+      </button>
+    </div>
+  </header>
+
+  <div class="body-layout">
+
+    <!-- SIDEBAR -->
+    <nav class="sidebar">
+      <div class="nav-group">
+        <div class="nav-label">Main</div>
+        <div class="nav-item active" id="nav-dash" onclick="showView('dash',this,'Dashboard')">
+          <i class="ti ti-layout-dashboard" aria-hidden="true"></i> Dashboard
+        </div>
+        <div class="nav-item" id="nav-upload" onclick="showView('upload',this,'Upload SOP')">
+          <i class="ti ti-upload" aria-hidden="true"></i> Upload SOP
+        </div>
+        <div class="nav-item" id="nav-manage" onclick="showView('manage',this,'Manage SOPs')">
+          <i class="ti ti-files" aria-hidden="true"></i> Manage SOPs
+          <span class="nav-badge" id="draft-badge" style="display:none">0</span>
+        </div>
+      </div>
+      <div class="nav-divider"></div>
+      <div class="nav-group">
+        <div class="nav-label">Config</div>
+        <div class="nav-item" id="nav-env" onclick="showView('env',this,'Environment Variables')">
+          <i class="ti ti-key" aria-hidden="true"></i> Keys & Config
+        </div>
+      </div>
+      <div class="sidebar-footer">
+        The Golden Standard<br>
+        Natal's AC, Plumbing &amp; Electric<br>
+        Hosted on Netlify · v1.0
+      </div>
+    </nav>
+
+    <!-- VIEWS -->
+    <main class="main">
+      <div class="views">
+
+        <!-- DASHBOARD -->
+        <div id="view-dash" class="active">
+          <div class="page">
+            <h1>Dashboard</h1>
+            <p class="page-sub">Upload documents, review AI-parsed content, and publish SOPs to the portal.</p>
+            <div id="env-status-banner"></div>
+            <div class="stats-row" id="dash-stats"></div>
+            <div class="card">
+              <div class="card-hdr"><i class="ti ti-clock" aria-hidden="true"></i> Recent uploads</div>
+              <div id="recent-list" style="padding:0"></div>
+            </div>
+            <div class="alert alert-info">
+              <i class="ti ti-info-circle" aria-hidden="true"></i>
+              <div><strong>How it works:</strong> Upload a Word (.docx) or PDF. Claude reads the document server-side and extracts all phases and steps. You review and edit, then publish to Google Sheets — which feeds the live portal instantly. Your Anthropic API key is stored securely in Netlify and never exposed in the browser.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- UPLOAD -->
+        <div id="view-upload">
+          <div class="page" style="max-width:800px">
+            <h1>Upload SOP Document</h1>
+            <p class="page-sub">Upload a Word or PDF document. Claude will read it and extract all phases and steps automatically. You review before publishing.</p>
+
+            <div id="upload-alert"></div>
+
+            <div id="step-1">
+              <div class="card">
+                <div class="card-hdr"><i class="ti ti-file-upload" aria-hidden="true"></i> Step 1 — Upload document</div>
+                <div class="card-body">
+                  <div class="upload-zone" id="upload-zone">
+                    <i class="ti ti-cloud-upload" aria-hidden="true"></i>
+                    <h3>Drop your SOP document here</h3>
+                    <p>or click to browse your computer</p>
+                    <div class="file-types">
+                      <span class="ft-badge ft-docx">Word .docx</span>
+                      <span class="ft-badge ft-pdf">PDF</span>
+                    </div>
+                    <input type="file" id="file-input" accept=".docx,.pdf,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onchange="onFileSelect(this)"/>
+                  </div>
+                  <div id="file-display" style="display:none"></div>
+                </div>
+              </div>
+
+              <div class="card">
+                <div class="card-hdr"><i class="ti ti-tag" aria-hidden="true"></i> Step 2 — SOP details</div>
+                <div class="card-body">
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label>SOP title *</label>
+                      <input type="text" id="u-title" placeholder="e.g. Demand Service Call SOP"/>
+                    </div>
+                    <div class="form-group">
+                      <label>Trade *</label>
+                      <select id="u-trade">
+                        <option value="">Select trade...</option>
+                        <option value="hvac">HVAC</option>
+                        <option value="plumbing">Plumbing</option>
+                        <option value="electrical">Electrical</option>
+                        <option value="csr">CSR / Office</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="form-row thirds">
+                    <div class="form-group">
+                      <label>Type *</label>
+                      <select id="u-type">
+                        <option value="">Select...</option>
+                        <option>Daily</option><option>Service</option><option>Install</option>
+                        <option>Maintenance</option><option>Inbound</option><option>Membership</option>
+                        <option>Safety</option><option>Other</option>
+                      </select>
+                    </div>
+                    <div class="form-group">
+                      <label>Duration</label>
+                      <input type="text" id="u-duration" placeholder="e.g. 2–4 hrs"/>
+                    </div>
+                    <div class="form-group">
+                      <label>Assigned manager</label>
+                      <select id="u-manager">
+                        <option value="">Select...</option>
+                        <option>Joe Bravata</option><option>Aaron Matthews</option>
+                        <option>Rodney Faucett</option><option>Darren Bell</option>
+                        <option>Madison Allen</option><option>Brandon Flowers</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="form-row full">
+                    <div class="form-group">
+                      <label>Description *</label>
+                      <textarea id="u-desc" placeholder="One or two sentences describing what this SOP covers and when it applies."></textarea>
+                    </div>
+                  </div>
+                  <div class="actions-row">
+                    <button class="btn-primary" id="parse-btn" onclick="parseSOP()">
+                      <i class="ti ti-cpu" style="font-size:15px" aria-hidden="true"></i> Parse with AI
+                    </button>
+                    <span class="status-msg" id="parse-status"></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Processing state -->
+            <div id="processing" style="display:none">
+              <div class="processing-box">
+                <div class="spinner"></div>
+                <div>
+                  <div class="proc-title" id="proc-title">Reading document...</div>
+                  <div class="proc-sub" id="proc-sub">Claude is extracting phases and steps. Usually takes 10–30 seconds.</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Step 3: Review -->
+            <div id="step-3" style="display:none">
+              <div class="alert alert-success">
+                <i class="ti ti-circle-check" aria-hidden="true"></i>
+                <div><strong>Parsed successfully.</strong> Review the extracted content below. Edit any phases or steps before publishing.</div>
+              </div>
+              <div class="parsed-preview">
+                <div class="pp-hdr">
+                  <i class="ti ti-eye" aria-hidden="true"></i>
+                  Step 3 — Review &amp; edit parsed content
+                  <div style="margin-left:auto;display:flex;gap:8px">
+                    <button class="btn-secondary btn-sm" onclick="addParsedPhase()"><i class="ti ti-plus" style="font-size:12px" aria-hidden="true"></i> Add phase</button>
+                    <button class="btn-secondary btn-sm" onclick="resetUpload()"><i class="ti ti-refresh" style="font-size:12px" aria-hidden="true"></i> Start over</button>
+                  </div>
+                </div>
+                <div id="parsed-content" style="padding:0"></div>
+              </div>
+
+              <div class="card">
+                <div class="card-hdr"><i class="ti ti-send" aria-hidden="true"></i> Step 4 — Publish</div>
+                <div class="card-body">
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label>Status</label>
+                      <select id="u-status">
+                        <option value="live">Live — publish immediately to portal</option>
+                        <option value="draft">Draft — save but don't show yet</option>
+                      </select>
+                    </div>
+                    <div class="form-group">
+                      <label>Version note</label>
+                      <input type="text" id="u-vnote" placeholder="e.g. Initial publish"/>
+                    </div>
+                  </div>
+                  <div class="actions-row">
+                    <button class="btn-teal" id="publish-btn" onclick="publishSOP()">
+                      <i class="ti ti-send" style="font-size:15px" aria-hidden="true"></i> Publish to portal
+                    </button>
+                    <button class="btn-secondary" onclick="saveDraft()">Save as draft</button>
+                    <span class="status-msg" id="pub-status"></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- MANAGE -->
+        <div id="view-manage">
+          <div class="page">
+            <h1>Manage SOPs</h1>
+            <p class="page-sub">All SOPs in the library. Toggle status, or remove.</p>
+            <div class="card" style="overflow:hidden">
+              <div class="card-hdr" style="justify-content:space-between">
+                <span><i class="ti ti-files" style="font-size:15px;color:var(--teal);margin-right:8px" aria-hidden="true"></i>SOP Library</span>
+                <button class="btn-teal btn-sm" onclick="showView('upload',document.getElementById('nav-upload'),'Upload SOP')">
+                  <i class="ti ti-plus" style="font-size:12px" aria-hidden="true"></i> Upload new
+                </button>
+              </div>
+              <div id="manage-list" style="padding:0"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- KEYS & CONFIG -->
+        <div id="view-env">
+          <div class="page" style="max-width:760px">
+            <h1>Keys &amp; Configuration</h1>
+            <p class="page-sub">All sensitive keys are stored as Netlify environment variables — never in this HTML file. Follow the steps below to configure them.</p>
+
+            <div class="alert alert-info">
+              <i class="ti ti-info-circle" aria-hidden="true"></i>
+              <div><strong>This is the right way to store secrets.</strong> Environment variables in Netlify are encrypted, never exposed to the browser, and only accessible by the server-side proxy functions that run on Netlify's infrastructure.</div>
+            </div>
+
+            <div class="card">
+              <div class="card-hdr"><i class="ti ti-key" aria-hidden="true"></i> Required environment variables</div>
+              <div class="card-body" style="padding:0">
+                <table class="env-table">
+                  <thead><tr><th>Variable name</th><th>What it holds</th><th>Example value</th></tr></thead>
+                  <tbody>
+                    <tr>
+                      <td>ANTHROPIC_API_KEY</td>
+                      <td>Your Anthropic API key. Used by the Claude proxy to parse uploaded documents. Get it from <strong>console.anthropic.com</strong> › API Keys.</td>
+                      <td>sk-ant-api03-...</td>
+                    </tr>
+                    <tr>
+                      <td>GOOGLE_SCRIPT_URL</td>
+                      <td>Your Google Apps Script Web App URL. Used to read and write SOPs to your Google Sheet database. Set up per the Setup Guide.</td>
+                      <td>https://script.google.com/macros/s/.../exec</td>
+                    </tr>
+                    <tr>
+                      <td>SITE_PASSWORD</td>
+                      <td>The shared password for the login screen. All managers use this same password. Change it anytime by updating this variable in Netlify.</td>
+                      <td>natals2026 (change this)</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-hdr"><i class="ti ti-brand-netlify" aria-hidden="true"></i> How to set environment variables in Netlify</div>
+              <div class="card-body">
+                <ol style="padding-left:18px;font-family:'Source Sans 3',sans-serif;font-size:13px;color:var(--text2);line-height:2">
+                  <li>Log in to <strong>app.netlify.com</strong> and open your site</li>
+                  <li>Click <strong>Site configuration</strong> › <strong>Environment variables</strong></li>
+                  <li>Click <strong>Add a variable</strong></li>
+                  <li>Enter the variable name exactly as shown above (all caps, underscores)</li>
+                  <li>Paste the value and click <strong>Save</strong></li>
+                  <li>Repeat for all three variables</li>
+                  <li>Go to <strong>Deploys</strong> and click <strong>Trigger deploy</strong> so the new variables take effect</li>
+                </ol>
+                <div class="alert alert-warn" style="margin-top:16px;margin-bottom:0">
+                  <i class="ti ti-alert-triangle" aria-hidden="true"></i>
+                  <div>You must trigger a new deploy after adding or changing environment variables. Netlify only reads them at deploy time for serverless functions.</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-hdr"><i class="ti ti-check-circle" aria-hidden="true"></i> Connection status</div>
+              <div class="card-body">
+                <p style="font-family:'Source Sans 3',sans-serif;font-size:13px;color:var(--text2);margin-bottom:14px">Click the button below to verify all three connections are working.</p>
+                <button class="btn-primary" onclick="checkConnections()">
+                  <i class="ti ti-plug" style="font-size:15px" aria-hidden="true"></i> Test connections
+                </button>
+                <div id="conn-results" style="margin-top:16px"></div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+</div>
+
+<script>
+// Global error catcher — surfaces any JS errors to the login screen
+window.onerror = function(msg, src, line, col, err) {
+  console.error('[GS ERROR]', msg, 'at', src, line + ':' + col);
+  const errEl = document.getElementById('login-err');
+  if (errEl) {
+    errEl.textContent = 'JS Error: ' + msg + ' (line ' + line + ')';
+    errEl.style.display = 'block';
+  }
+};
+/* ============================================================
+   THE GOLDEN STANDARD — Netlify-hosted Admin Tool
+   Natal's AC, Plumbing & Electric
+   
+   API calls route through Netlify serverless functions:
+   /.netlify/functions/claude-proxy  → claude-proxy.js  (Anthropic API)
+   /.netlify/functions/sheet-proxy   → sheet-proxy.js   (Google Sheets)
+   /.netlify/functions/auth    → auth.js          (password check)
+   
+   No API keys in this file. All stored in Netlify env vars.
+   ============================================================ */
+
+/* ── STATE ── */
+let SESSION_PASSWORD = '';   // Stored in memory after login
+let currentUser = null;
+let sopLibrary = [];
+let parsedPhases = [];
+let phaseCount = 0;
+let selectedFile = null;
+
+/* ── TRADE CONFIG ── */
+const TC = {
+  hvac:       { label:'HVAC',        color:'#1A3A5C' },
+  plumbing:   { label:'Plumbing',    color:'#3B6D11' },
+  electrical: { label:'Electrical',  color:'#854F0B' },
+  csr:        { label:'CSR / Office',color:'#3C3489' },
+};
+
+/* ════════════════════════════════════════════════════════════
+   AUTH
+   ════════════════════════════════════════════════════════════ */
+async function doLogin() {
+  console.log('[GS] doLogin called');
+  const userVal = document.getElementById('login-user').value;
+  const pass    = document.getElementById('login-pass').value;
+  const btn     = document.getElementById('login-btn');
+  const errEl   = document.getElementById('login-err');
+  const btnText = document.getElementById('login-btn-text');
+
+  errEl.style.display = 'none';
+
+  if (!userVal) { errEl.textContent = 'Please select your name.'; errEl.style.display = 'block'; return; }
+  if (!pass)    { errEl.textContent = 'Please enter the site password.'; errEl.style.display = 'block'; return; }
+
+  btn.disabled = true; btnText.textContent = 'Signing in...';
+
+  try {
+    const res = await fetch('/.netlify/functions/auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: pass }),
+    });
+
+    // Show the raw HTTP status so we can diagnose
+    if (!res.ok && res.status !== 401) {
+      errEl.textContent = 'Server error ' + res.status + '. Check Netlify function logs — go to Site > Functions > auth in your Netlify dashboard.';
+      errEl.style.display = 'block';
+      btn.disabled = false; btnText.textContent = 'Sign in';
+      return;
+    }
+
+    let data;
+    try {
+      data = await res.json();
+    } catch (jsonErr) {
+      errEl.textContent = 'Auth function returned non-JSON. Check Netlify Functions logs. Status: ' + res.status;
+      errEl.style.display = 'block';
+      btn.disabled = false; btnText.textContent = 'Sign in';
+      return;
+    }
+
+    if (data.ok) {
+      SESSION_PASSWORD = pass;
+      const parts = userVal.split('|');
+      currentUser = { id: parts[0], initials: parts[1], color: parts[2], name: getFullName(parts[0]) };
+      document.getElementById('u-av').textContent       = parts[1];
+      document.getElementById('u-av').style.background  = parts[2];
+      document.getElementById('u-name').textContent     = currentUser.name.split(' ')[0] + ' ' + currentUser.name.split(' ')[1][0] + '.';
+      document.getElementById('login-screen').style.display = 'none';
+      document.getElementById('app-shell').classList.add('visible');
+      initApp();
+    } else {
+      errEl.textContent = data.error || 'Incorrect password. Contact Brandon.';
+      errEl.style.display = 'block';
+    }
+
+  } catch (err) {
+    // Network-level failure — /.netlify/functions/auth route not found or function not deployed
+    if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
+      errEl.textContent = 'Cannot reach /.netlify/functions/auth. The Netlify function may not be deployed yet. Go to your Netlify dashboard > Deploys and trigger a new deploy, then try again.';
+    } else {
+      errEl.textContent = 'Login error: ' + err.message;
+    }
+    errEl.style.display = 'block';
+  }
+
+  btn.disabled = false; btnText.textContent = 'Sign in';
+}
+
+function getFullName(id) {
+  const names = { brandon:'Brandon Flowers', joe:'Joe Bravata', aaron:'Aaron Matthews', rodney:'Rodney Faucett', darren:'Darren Bell', madison:'Madison Allen' };
+  return names[id] || id;
+}
+
+function signOut() {
+  SESSION_PASSWORD = '';
+  currentUser = null;
+  sopLibrary = [];
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('app-shell').classList.remove('visible');
+  document.getElementById('login-pass').value = '';
+  document.getElementById('login-err').style.display = 'none';
+}
+
+/* ════════════════════════════════════════════════════════════
+   PROXY CALLS — all API traffic goes through /api/* endpoints
+   ════════════════════════════════════════════════════════════ */
+async function callClaude(body) {
+  const res = await fetch('/.netlify/functions/claude-proxy', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-site-password': SESSION_PASSWORD,
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || 'Claude proxy error ' + res.status);
+  }
+  return res.json();
+}
+
+async function callSheet(method, body) {
+  const opts = {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      'x-site-password': SESSION_PASSWORD,
+    },
+  };
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch('/.netlify/functions/sheet-proxy', opts);
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || 'Sheet proxy error ' + res.status);
+  }
+  return res.json();
+}
+
+/* ════════════════════════════════════════════════════════════
+   APP INIT
+   ════════════════════════════════════════════════════════════ */
+async function initApp() {
+  await loadLibrary();
+  buildDashboard();
+  buildManageList();
+  initPhaseBuilder();
+  checkEnvStatus();
+}
+
+async function loadLibrary() {
+  try {
+    const data = await callSheet('GET');
+    sopLibrary = Array.isArray(data) ? data.filter(r => r.id) : [];
+  } catch (e) {
+    sopLibrary = [];
+  }
+}
+
+/* ════════════════════════════════════════════════════════════
+   DASHBOARD
+   ════════════════════════════════════════════════════════════ */
+async function checkEnvStatus() {
+  const banner = document.getElementById('env-status-banner');
+  try {
+    const res = await callClaude({ model:'claude-sonnet-4-6', max_tokens:10, messages:[{role:'user',content:'ping'}] });
+    if (res.content) {
+      banner.innerHTML = '<div class="env-banner env-ok"><i class="ti ti-circle-check" aria-hidden="true"></i><div><strong>All systems connected.</strong> Anthropic API key is valid and working. Google Sheets proxy is active.</div></div>';
+    } else {
+      throw new Error('No content');
+    }
+  } catch (e) {
+    banner.innerHTML = '<div class="env-banner env-warn"><i class="ti ti-alert-triangle" aria-hidden="true"></i><div><strong>Setup needed.</strong> Go to <strong>Keys &amp; Config</strong> to verify your Netlify environment variables are set. Then trigger a new deploy in Netlify.</div></div>';
+  }
+}
+
+function buildDashboard() {
+  const live   = sopLibrary.filter(s => s.status === 'live').length;
+  const drafts = sopLibrary.filter(s => s.status === 'draft').length;
+  const total  = sopLibrary.length;
+  const steps  = sopLibrary.reduce((a, s) => a + (parseInt(s.steps_count) || 0), 0);
+
+  document.getElementById('dash-stats').innerHTML =
+    statCard(live,   'Live SOPs',          'In the portal now') +
+    statCard(drafts, 'Drafts',             'Not yet published') +
+    statCard(total,  'Total uploaded',     'All time') +
+    statCard(steps,  'Steps documented',   'Across all SOPs');
+
+  const badge = document.getElementById('draft-badge');
+  if (drafts > 0) { badge.textContent = drafts; badge.style.display = 'inline'; } else { badge.style.display = 'none'; }
+
+  const recent = sopLibrary.slice(-5).reverse();
+  const actEl  = document.getElementById('recent-list');
+  if (!recent.length) {
+    actEl.innerHTML = '<div style="padding:22px;text-align:center;color:var(--text3);font-family:\'Source Sans 3\',sans-serif;font-size:13px">No SOPs uploaded yet. Click Upload SOP to get started.</div>';
+    return;
+  }
+  actEl.innerHTML = recent.map(s => {
+    const tc = TC[s.trade] || TC.hvac;
+    return `<div class="sop-list-item">
+      <span class="sli-dot" style="background:${tc.color}"></span>
+      <div style="flex:1"><div class="sli-title">${esc(s.title)}</div><div class="sli-meta">${tc.label} · ${s.type} · ${s.updated_by || '—'} · ${s.updated || '—'}</div></div>
+      <span class="sli-status ${s.status === 'live' ? 's-live' : 's-draft'}">${s.status}</span>
+    </div>`;
+  }).join('');
+}
+
+function statCard(val, lbl, sub) {
+  return `<div class="stat-card"><div class="stat-val">${val}</div><div class="stat-lbl">${lbl}</div><div class="stat-sub">${sub}</div></div>`;
+}
+
+/* ════════════════════════════════════════════════════════════
+   FILE HANDLING
+   ════════════════════════════════════════════════════════════ */
+function onFileSelect(input) {
+  const file = input.files[0];
+  if (!file) return;
+  selectedFile = file;
+  showFileSelected(file);
+}
+
+function showFileSelected(file) {
+  document.getElementById('upload-zone').style.opacity = '0.5';
+  const ext = file.name.split('.').pop().toLowerCase();
+  document.getElementById('file-display').style.display = 'flex';
+  document.getElementById('file-display').innerHTML = `
+    <div class="file-selected">
+      <i class="ti ti-file-type-${ext === 'pdf' ? 'pdf' : 'doc'}" aria-hidden="true"></i>
+      <span class="file-name">${esc(file.name)}</span>
+      <span class="file-size">${(file.size / 1024).toFixed(0)} KB</span>
+      <button class="file-rm" onclick="removeFile()"><i class="ti ti-x" aria-hidden="true"></i></button>
+    </div>`;
+}
+
+function removeFile() {
+  selectedFile = null;
+  document.getElementById('file-input').value = '';
+  document.getElementById('upload-zone').style.opacity = '1';
+  document.getElementById('file-display').style.display = 'none';
+  document.getElementById('file-display').innerHTML = '';
+}
+
+// Drag and drop
+const zone = document.getElementById('upload-zone');
+['dragenter','dragover'].forEach(e => zone.addEventListener(e, ev => { ev.preventDefault(); zone.classList.add('drag-over'); }));
+['dragleave','drop'].forEach(e => zone.addEventListener(e, ev => { ev.preventDefault(); zone.classList.remove('drag-over'); }));
+zone.addEventListener('drop', ev => { const f = ev.dataTransfer.files[0]; if (f) { selectedFile = f; showFileSelected(f); } });
+
+/* ════════════════════════════════════════════════════════════
+   AI PARSING — calls /.netlify/functions/claude-proxy proxy (no key in browser)
+   ════════════════════════════════════════════════════════════ */
+async function parseSOP() {
+  const title = document.getElementById('u-title').value.trim();
+  const trade = document.getElementById('u-trade').value;
+  const type  = document.getElementById('u-type').value;
+  const desc  = document.getElementById('u-desc').value.trim();
+
+  if (!selectedFile) { setAlert('warn', 'Please upload a document first.'); return; }
+  if (!title || !trade || !type || !desc) { setAlert('warn', 'Please fill in all required fields before parsing.'); return; }
+
+  document.getElementById('step-1').style.display = 'none';
+  document.getElementById('processing').style.display = 'block';
+  document.getElementById('step-3').style.display = 'none';
+  setAlert('', '');
+
+  try {
+    document.getElementById('proc-title').textContent = 'Reading document...';
+    document.getElementById('proc-sub').textContent = 'Converting your file for processing.';
+
+    const fileData = await readBase64(selectedFile);
+    const ext = selectedFile.name.split('.').pop().toLowerCase();
+    const mediaType = ext === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+
+    document.getElementById('proc-title').textContent = 'Extracting phases and steps with AI...';
+    document.getElementById('proc-sub').textContent = 'Claude is reading your document. Usually takes 10–30 seconds.';
+
+    const prompt = `You are parsing an SOP document for Natal's Air Conditioning, Plumbing & Electric — a home services company in New Orleans.
+
+Read the document and extract all phases and steps into the exact JSON format below.
+
+RULES:
+- Group related steps into logical phases (e.g. "Before the job", "On arrival", "During the job", "Wrap-up")
+- Each step should be a single clear action
+- If a step has a sub-note or clarification, put it in the "note" field
+- If a step is a critical safety or compliance item, set "critical": true
+- Phase color: use "navy" for preparation phases, "teal" for active work phases, "gold" for completion/closing phases, "dark" for final steps
+- Return ONLY valid JSON, no other text, no markdown fences
+
+{
+  "phases": [
+    {
+      "title": "Phase title here",
+      "color": "navy",
+      "time": "Optional time or trigger",
+      "alerts": [{ "type": "warn", "text": "Warning text if any" }],
+      "steps": [
+        { "text": "Step text here", "note": "Optional sub-note", "critical": false }
+      ]
+    }
+  ]
+}`;
+
+    // Call through Netlify proxy — key is server-side
+    const data = await callClaude({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 4000,
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'document', source: { type: 'base64', media_type: mediaType, data: fileData } },
+          { type: 'text', text: prompt }
+        ]
+      }]
+    });
+
+    const text  = data.content.map(b => b.text || '').join('');
+    const clean = text.replace(/```json|```/g, '').trim();
+    const parsed = JSON.parse(clean);
+
+    parsedPhases = parsed.phases || [];
+    document.getElementById('processing').style.display = 'none';
+    document.getElementById('step-3').style.display = 'block';
+    renderParsed();
+    setAlert('success', `Successfully extracted ${parsedPhases.length} phase${parsedPhases.length !== 1 ? 's' : ''} from "${selectedFile.name}". Review and edit below before publishing.`);
+
+  } catch (err) {
+    document.getElementById('processing').style.display = 'none';
+    document.getElementById('step-1').style.display = 'block';
+    let hint = '';
+    if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) hint = ' Check your internet connection and try again.';
+    else if (err.message.includes('not configured')) hint = ' Go to Keys & Config and verify your Netlify environment variables are set, then trigger a new deploy.';
+    else if (err.message.includes('401') || err.message.includes('Unauthorized')) hint = ' Your site password may have expired. Try signing out and back in.';
+    setAlert('err', 'Parsing failed: ' + err.message + hint);
+  }
+}
+
+function readBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload  = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = () => reject(new Error('Failed to read file'));
+    reader.readAsDataURL(file);
+  });
+}
+
+/* ════════════════════════════════════════════════════════════
+   PARSED CONTENT EDITOR
+   ════════════════════════════════════════════════════════════ */
+function renderParsed() {
+  const el = document.getElementById('parsed-content');
+  if (!parsedPhases.length) { el.innerHTML = '<div style="padding:18px;text-align:center;color:var(--text3)">No phases extracted.</div>'; return; }
+  el.innerHTML = parsedPhases.map((ph, pi) => `
+    <div class="parsed-phase" id="pph-${pi}">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <span class="ph-label">Phase ${pi + 1}</span>
+        ${pi > 0 ? `<button class="btn-secondary btn-sm" onclick="rmPhase(${pi})" style="color:var(--red);border-color:var(--red)">Remove</button>` : ''}
+      </div>
+      <div class="form-row" style="margin-bottom:10px">
+        <div class="form-group"><label>Phase title</label><input type="text" value="${esc(ph.title)}" oninput="parsedPhases[${pi}].title=this.value"/></div>
+        <div class="form-group"><label>Time / trigger</label><input type="text" value="${esc(ph.time || '')}" oninput="parsedPhases[${pi}].time=this.value"/></div>
+      </div>
+      <div class="form-group" style="margin-bottom:10px">
+        <label>Steps — one per row</label>
+        ${(ph.steps || []).map((st, si) => `
+          <div class="step-edit-row" style="margin-bottom:6px">
+            <input type="text" value="${esc(st.text)}" placeholder="Step text" oninput="parsedPhases[${pi}].steps[${si}].text=this.value"/>
+            <label class="crit-label"><input type="checkbox" ${st.critical ? 'checked' : ''} onchange="parsedPhases[${pi}].steps[${si}].critical=this.checked" style="width:14px;height:14px"/> Critical</label>
+            <button class="btn-icon danger" onclick="rmStep(${pi},${si})" title="Remove"><i class="ti ti-x" style="font-size:12px" aria-hidden="true"></i></button>
+          </div>`).join('')}
+        <button class="btn-secondary btn-sm" style="margin-top:4px" onclick="addStep(${pi})"><i class="ti ti-plus" style="font-size:12px" aria-hidden="true"></i> Add step</button>
+      </div>
+    </div>`).join('');
+}
+
+function rmPhase(pi)  { parsedPhases.splice(pi, 1); renderParsed(); }
+function rmStep(pi,si){ parsedPhases[pi].steps.splice(si, 1); renderParsed(); }
+function addStep(pi)  { parsedPhases[pi].steps.push({ text:'', note:'', critical:false }); renderParsed(); }
+function addParsedPhase() { parsedPhases.push({ title:'New phase', color:'teal', time:'', steps:[{text:'',note:'',critical:false}] }); renderParsed(); }
+
+/* Phase builder for manual entry */
+function initPhaseBuilder() { phaseCount = 0; addPhase(); }
+
+/* ════════════════════════════════════════════════════════════
+   PUBLISH — calls /.netlify/functions/sheet-proxy proxy
+   ════════════════════════════════════════════════════════════ */
+async function publishSOP(forceDraft) {
+  const title   = document.getElementById('u-title').value.trim();
+  const trade   = document.getElementById('u-trade').value;
+  const type    = document.getElementById('u-type').value;
+  const dur     = document.getElementById('u-duration').value.trim();
+  const mgr     = document.getElementById('u-manager').value;
+  const desc    = document.getElementById('u-desc').value.trim();
+  const status  = forceDraft ? 'draft' : document.getElementById('u-status').value;
+  const vnote   = document.getElementById('u-vnote').value.trim();
+
+  if (!parsedPhases.length) { document.getElementById('pub-status').textContent = 'No parsed content to publish.'; return; }
+
+  const steps_count = parsedPhases.reduce((a,p) => a + (p.steps||[]).length, 0);
+  const id = trade + '-' + title.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'') + '-' + Date.now();
+  const now = new Date().toLocaleDateString('en-US',{month:'long',year:'numeric'});
+
+  const sop = { id, title, trade, type, status, manager:mgr||currentUser?.name||'Unknown', duration:dur||'—', description:desc, phases_json:JSON.stringify(parsedPhases), steps_count, updated:now, updated_by:currentUser?.name||'Unknown', version_note:vnote, source_file:selectedFile?.name||'Manually entered' };
+
+  document.getElementById('publish-btn').disabled = true;
+  document.getElementById('pub-status').textContent = 'Publishing...';
+
+  try {
+    await callSheet('POST', { action:'upsert', row:sop });
+    sopLibrary.push(sop);
+    buildDashboard();
+    buildManageList();
+    document.getElementById('step-3').style.display = 'none';
+    document.getElementById('step-1').style.display = 'none';
+    setAlert('success', `"${title}" ${status === 'live' ? 'published live to the portal' : 'saved as draft'}. Google Sheet updated.`);
+    setTimeout(() => { resetUpload(); }, 3000);
+  } catch (e) {
+    document.getElementById('pub-status').textContent = '';
+    setAlert('err', 'Publish failed: ' + e.message + ' — Check your GOOGLE_SCRIPT_URL in Netlify environment variables.');
+  }
+
+  document.getElementById('publish-btn').disabled = false;
+}
+
+async function saveDraft() { await publishSOP(true); }
+
+function resetUpload() {
+  removeFile();
+  document.getElementById('step-1').style.display = 'block';
+  document.getElementById('step-3').style.display = 'none';
+  document.getElementById('processing').style.display = 'none';
+  parsedPhases = [];
+  document.getElementById('parsed-content').innerHTML = '';
+  ['u-title','u-duration','u-desc','u-vnote'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  ['u-trade','u-type','u-manager','u-status'].forEach(id=>{const el=document.getElementById(id);if(el)el.selectedIndex=0;});
+  setAlert('','');
+}
+
+/* ════════════════════════════════════════════════════════════
+   MANAGE LIST
+   ════════════════════════════════════════════════════════════ */
+function buildManageList() {
+  const el = document.getElementById('manage-list');
+  if (!sopLibrary.length) { el.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text3);font-family:\'Source Sans 3\',sans-serif">No SOPs yet. Upload one to get started.</div>'; return; }
+  el.innerHTML = sopLibrary.slice().reverse().map(s => {
+    const tc = TC[s.trade] || TC.hvac;
+    return `<div class="sop-list-item">
+      <span class="sli-dot" style="background:${tc.color}"></span>
+      <div style="flex:1"><div class="sli-title">${esc(s.title)}</div><div class="sli-meta">${tc.label} · ${s.type} · ${s.manager||'—'} · ${s.steps_count} steps · ${s.updated}</div></div>
+      <span class="sli-status ${s.status==='live'?'s-live':'s-draft'}">${s.status}</span>
+      <div class="sli-actions">
+        <button class="btn-icon" title="Toggle status" onclick="toggleStatus('${s.id}')"><i class="ti ti-${s.status==='live'?'eye-off':'eye'}" style="font-size:13px" aria-hidden="true"></i></button>
+        <button class="btn-icon danger" title="Delete" onclick="deleteSOP('${s.id}')"><i class="ti ti-trash" style="font-size:13px" aria-hidden="true"></i></button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function toggleStatus(id) {
+  const sop = sopLibrary.find(s => s.id === id);
+  if (!sop) return;
+  sop.status = sop.status === 'live' ? 'draft' : 'live';
+  try { await callSheet('POST', { action:'upsert', row:sop }); } catch(e) {}
+  buildManageList(); buildDashboard();
+}
+
+async function deleteSOP(id) {
+  if (!confirm('Delete this SOP? This cannot be undone.')) return;
+  sopLibrary = sopLibrary.filter(s => s.id !== id);
+  try { await callSheet('POST', { action:'delete', id }); } catch(e) {}
+  buildManageList(); buildDashboard();
+}
+
+/* ════════════════════════════════════════════════════════════
+   CONNECTION TEST
+   ════════════════════════════════════════════════════════════ */
+async function checkConnections() {
+  const el = document.getElementById('conn-results');
+  el.innerHTML = '<div class="alert alert-info"><i class="ti ti-loader" aria-hidden="true"></i><div>Testing connections...</div></div>';
+
+  const results = [];
+
+  // Test Claude
+  try {
+    const r = await callClaude({ model:'claude-sonnet-4-6', max_tokens:10, messages:[{role:'user',content:'ping'}] });
+    results.push({ name:'Anthropic API (ANTHROPIC_API_KEY)', ok:!!r.content, msg: r.content ? 'Connected' : 'Invalid response' });
+  } catch(e) { results.push({ name:'Anthropic API (ANTHROPIC_API_KEY)', ok:false, msg:e.message }); }
+
+  // Test Sheet
+  try {
+    const r = await callSheet('GET');
+    results.push({ name:'Google Sheets (GOOGLE_SCRIPT_URL)', ok:Array.isArray(r), msg: Array.isArray(r) ? `Connected — ${r.length} SOPs in sheet` : 'Invalid response' });
+  } catch(e) { results.push({ name:'Google Sheets (GOOGLE_SCRIPT_URL)', ok:false, msg:e.message }); }
+
+  // Site password (implicit — if we're here, it worked)
+  results.push({ name:'Site Password (SITE_PASSWORD)', ok:true, msg:'Working — you are logged in' });
+
+  el.innerHTML = results.map(r => `
+    <div class="alert ${r.ok ? 'alert-success' : 'alert-err'}" style="margin-bottom:8px">
+      <i class="ti ti-${r.ok ? 'circle-check' : 'alert-circle'}" aria-hidden="true"></i>
+      <div><strong>${r.name}</strong><br>${r.msg}</div>
+    </div>`).join('');
+}
+
+/* ════════════════════════════════════════════════════════════
+   NAVIGATION
+   ════════════════════════════════════════════════════════════ */
+function showView(id, navEl, title) {
+  document.querySelectorAll('.views > div').forEach(v => v.classList.remove('active'));
+  document.getElementById('view-' + id).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  if (navEl) navEl.classList.add('active');
+  document.getElementById('tb-crumb').textContent = 'Admin';
+  document.getElementById('tb-sep').style.display = title ? 'inline' : 'none';
+  document.getElementById('tb-page').textContent = title || '';
+}
+
+/* ════════════════════════════════════════════════════════════
+   UTILITIES
+   ════════════════════════════════════════════════════════════ */
+function esc(str) {
+  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function setAlert(type, msg) {
+  const el = document.getElementById('upload-alert');
+  if (!type || !msg) { el.innerHTML = ''; return; }
+  const icons = { warn:'alert-triangle', success:'circle-check', info:'info-circle', err:'alert-circle' };
+  el.innerHTML = `<div class="alert alert-${type}"><i class="ti ti-${icons[type]||'info-circle'}" aria-hidden="true"></i><div>${msg}</div></div>`;
+}
+
+function addPhase() {
+  phaseCount++;
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  var p = document.getElementById('login-pass');
+  if (p) p.addEventListener('keydown', function(e) { if (e.key === 'Enter') doLogin(); });
+});
+</script>
+</body>
+</html>

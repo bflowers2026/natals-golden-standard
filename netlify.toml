@@ -1,0 +1,40 @@
+# ============================================================
+# NETLIFY CONFIGURATION — The Golden Standard Admin Tool
+# Natal's AC, Plumbing & Electric
+# ============================================================
+# Set these in Netlify > Site configuration > Environment variables:
+#
+#   ANTHROPIC_API_KEY   =  sk-ant-api03-...
+#   GOOGLE_SCRIPT_URL   =  https://script.google.com/macros/s/.../exec
+#   SITE_PASSWORD       =  your chosen password
+#
+# After adding variables: Deploys > Trigger deploy
+# ============================================================
+
+[build]
+  publish = "."
+  functions = "netlify/functions"
+
+# Route /api/claude to the Claude proxy function
+[[redirects]]
+  from = "/api/claude"
+  to   = "/.netlify/functions/claude-proxy"
+  status = 200
+  force = true
+
+# Route /api/sheet to the Google Sheets proxy function
+[[redirects]]
+  from = "/api/sheet"
+  to   = "/.netlify/functions/sheet-proxy"
+  status = 200
+  force = true
+
+# Route /api/auth to the auth function
+[[redirects]]
+  from = "/api/auth"
+  to   = "/.netlify/functions/auth"
+  status = 200
+  force = true
+
+[functions]
+  node_bundler = "esbuild"
