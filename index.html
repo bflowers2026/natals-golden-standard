@@ -718,11 +718,17 @@ async function callClaude(body) {
     },
     body: JSON.stringify(body),
   });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || 'Claude proxy error ' + res.status);
+  const responseText = await res.text();
+  let responseData;
+  try {
+    responseData = JSON.parse(responseText);
+  } catch(e) {
+    throw new Error('Non-JSON response from proxy (status ' + res.status + '): ' + responseText.slice(0, 200));
   }
-  return res.json();
+  if (!res.ok) {
+    throw new Error(responseData.error || responseData.message || JSON.stringify(responseData) || 'Claude proxy error ' + res.status);
+  }
+  return responseData;
 }
 
 async function callSheet(method, body) {
@@ -931,11 +937,15 @@ RULES:
   } catch (err) {
     document.getElementById('processing').style.display = 'none';
     document.getElementById('step-1').style.display = 'block';
+    // Stringify error properly regardless of type
+    let errMsg = typeof err === 'string' ? err : (err && err.message) ? err.message : JSON.stringify(err);
     let hint = '';
-    if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) hint = ' Check your internet connection and try again.';
-    else if (err.message.includes('not configured')) hint = ' Go to Keys & Config and verify your Netlify environment variables are set, then trigger a new deploy.';
-    else if (err.message.includes('401') || err.message.includes('Unauthorized')) hint = ' Your site password may have expired. Try signing out and back in.';
-    setAlert('err', 'Parsing failed: ' + err.message + hint);
+    if (errMsg.includes('Failed to fetch') || errMsg.includes('NetworkError')) hint = ' Check your internet connection.';
+    else if (errMsg.includes('not configured') || errMsg.includes('ANTHROPIC_API_KEY')) hint = ' Your ANTHROPIC_API_KEY is not set in Netlify environment variables. Go to Site configuration > Environment variables and add it, then trigger a new deploy.';
+    else if (errMsg.includes('401') || errMsg.includes('Unauthorized')) hint = ' Authentication issue — try signing out and back in.';
+    else if (errMsg.includes('500')) hint = ' Server error in the Claude proxy function. Check Netlify > Functions > claude-proxy logs for details.';
+    else if (errMsg.includes('404')) hint = ' Function not found. Make sure the deploy completed successfully and functions are listed under Site > Functions.';
+    setAlert('err', 'Parsing failed: ' + errMsg + hint);
   }
 }
 
