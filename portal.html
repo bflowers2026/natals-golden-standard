@@ -302,17 +302,17 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);fon
     <div class="logo-g">G</div>
     <h2>The Golden Standard</h2>
     <p>Natal's field operations portal.<br/>Sign in to view current procedures.</p>
-    <div class="login-field">
-      <label>Your name</label>
-      <select id="login-user"></select>
-    </div>
-    <div class="login-field">
+    <div class="login-field" id="login-step1">
       <label>Site password</label>
       <input type="password" id="login-pass" placeholder="Enter site password" autocomplete="current-password"/>
     </div>
+    <div class="login-field" id="login-step2" style="display:none">
+      <label>Who are you?</label>
+      <select id="login-user"></select>
+    </div>
     <button class="login-btn" id="login-btn" onclick="doLogin()"><i class="ti ti-login" aria-hidden="true"></i> Sign in</button>
     <div class="login-err" id="login-err"></div>
-    <div class="login-foot">Same password as the admin tool.<br/>Internal use only — Natal's managers &amp; techs.</div>
+    <div class="login-foot">Same password as the admin tool.<br/>Your name list is managed in the Google Sheet.</div>
   </div>
 </div>
 
@@ -414,8 +414,11 @@ const FN_CLAUDE = '/.netlify/functions/claude-proxy';
 const AI_MODEL  = 'claude-sonnet-4-5';
 const POLL_MS   = 60000;   // auto-refresh interval
 
-/* ── People (for greeting + training paths) ── */
-const USERS=[
+/* ── People (for greeting + training paths) ──
+   The real roster comes LIVE from the Google Sheet "Users" tab
+   (via the admin's Apps Script). This SEED list is only a
+   fallback for preview mode or before the Users tab exists. */
+const SEED_USERS=[
   {id:'brandon',name:'Brandon Flowers',init:'BF',role:'Marketing Director',trade:null,color:'#2BA99B'},
   {id:'joe',name:'Joe Bravata',init:'JB',role:'HVAC Service Manager',trade:'hvac',color:'#1A3A5C'},
   {id:'aaron',name:'Aaron Matthews',init:'AM',role:'HVAC Install Manager',trade:'hvac',color:'#234e7a'},
@@ -423,7 +426,15 @@ const USERS=[
   {id:'darren',name:'Darren Bell',init:'DB',role:'Electrical Manager',trade:'electrical',color:'#854F0B'},
   {id:'madison',name:'Madison Allen',init:'MA',role:'Office Manager',trade:'csr',color:'#3C3489'},
 ];
-let CU=USERS[0];
+let ROSTER=[], CU=null, AUTHED=false;
+/* Turn a sheet row {id,name,role,trade} into a display user (initials + trade color). */
+function decorate(u){
+  const name=u.name||u.id||'Technician';
+  const init=(name.split(/\s+/).filter(Boolean).map(w=>w[0]).slice(0,2).join('').toUpperCase())||'?';
+  const trade=(u.trade&&String(u.trade).toLowerCase())||null;
+  const color=(trade&&TC[trade])?TC[trade].color:'#2BA99B';
+  return {id:u.id||name.toLowerCase().replace(/[^a-z0-9]+/g,'-'),name,role:u.role||'',trade,init,color};
+}
 
 const TC={
   hvac:{label:'HVAC',color:'#1A3A5C',pill:'tp-hvac',icon:'ti-wind'},
@@ -446,38 +457,44 @@ function saveProgress(){try{localStorage.setItem(progKey(),JSON.stringify({CHK,A
 /* ════════════════════════════════════════════════════════════
    AUTH
    ════════════════════════════════════════════════════════════ */
-function buildUserSelect(){
-  document.getElementById('login-user').innerHTML=USERS.map(u=>`<option value="${u.id}">${u.name} — ${u.role}</option>`).join('');
+function populateUserSelect(list){
+  document.getElementById('login-user').innerHTML=list.map(u=>`<option value="${u.id}">${u.name}${u.role?' — '+u.role:''}</option>`).join('');
 }
+/* Load the live technician roster from the sheet (gated by the password we just verified). */
+async function loadRoster(){
+  try{
+    const list=await callSheet('POST',{action:'listUsers'});
+    if(Array.isArray(list)&&list.length){ROSTER=list.map(decorate);return;}
+  }catch(e){}
+  ROSTER=SEED_USERS; // Users tab missing/empty → fall back to built-in names
+}
+/* Two-step login: 1) verify shared password  2) pick your name from the live roster. */
 async function doLogin(){
-  const uid=document.getElementById('login-user').value;
-  const pass=document.getElementById('login-pass').value;
   const err=document.getElementById('login-err');const btn=document.getElementById('login-btn');
   err.style.display='none';
+  if(AUTHED||DEMO){finishLogin();return;}
+  const pass=document.getElementById('login-pass').value;
   if(!pass){err.textContent='Please enter the site password.';err.style.display='block';return;}
   btn.disabled=true;btn.innerHTML='<i class="ti ti-loader" aria-hidden="true"></i> Signing in…';
   try{
     const res=await fetch(FN_AUTH,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pass})});
     const data=await res.json().catch(()=>({}));
-    if(res.ok&&data.ok){
-      SESSION_PASSWORD=pass;CU=USERS.find(u=>u.id===uid)||USERS[0];DEMO=false;
-      try{sessionStorage.setItem('gs_portal_session',JSON.stringify({uid,pass}));}catch(e){}
-      enterApp();
-    }else if(res.status===401){
-      err.textContent='Incorrect password. Same password as the admin tool.';err.style.display='block';
-    }else{
-      // configError — let them know but allow in (backend will still gate data)
-      err.textContent=(data.error||'Login service not configured.')+' You can continue in preview mode.';err.style.display='block';
-      enterDemo(uid);
-    }
-  }catch(e){
-    // Auth function unreachable (e.g. opened off-Netlify) → preview/demo mode
-    enterDemo(uid);
-  }
-  btn.disabled=false;btn.innerHTML='<i class="ti ti-login" aria-hidden="true"></i> Sign in';
+    if(res.ok&&data.ok){SESSION_PASSWORD=pass;AUTHED=true;DEMO=false;await loadRoster();revealStep2();}
+    else if(res.status===401){err.textContent='Incorrect password. Same password as the admin tool.';err.style.display='block';btn.disabled=false;btn.innerHTML='<i class="ti ti-login" aria-hidden="true"></i> Sign in';}
+    else{err.textContent=(data.error||'Login service not configured.')+' Continuing in preview mode.';err.style.display='block';DEMO=true;ROSTER=SEED_USERS;revealStep2();}
+  }catch(e){DEMO=true;ROSTER=SEED_USERS;revealStep2();}
 }
-function enterDemo(uid){
-  DEMO=true;SESSION_PASSWORD='';CU=USERS.find(u=>u.id===uid)||USERS[0];
+function revealStep2(){
+  populateUserSelect(ROSTER);
+  document.getElementById('login-step1').style.display='none';
+  document.getElementById('login-step2').style.display='block';
+  const btn=document.getElementById('login-btn');btn.disabled=false;btn.innerHTML='<i class="ti ti-arrow-right" aria-hidden="true"></i> Enter portal';
+  document.getElementById('login-user').focus();
+}
+function finishLogin(){
+  const uid=document.getElementById('login-user').value;
+  CU=ROSTER.find(u=>u.id===uid)||ROSTER[0]||decorate({name:'Technician'});
+  try{sessionStorage.setItem('gs_portal_session',JSON.stringify({user:CU,pass:SESSION_PASSWORD,demo:DEMO}));}catch(e){}
   enterApp();
 }
 function enterApp(){
@@ -899,14 +916,15 @@ const SEED_PATHS=[
 
 /* ── Boot: restore session if present, else show login ── */
 (function boot(){
-  buildUserSelect();
   let saved=null;try{saved=JSON.parse(sessionStorage.getItem('gs_portal_session')||'null');}catch(e){}
-  if(saved&&saved.pass){
-    SESSION_PASSWORD=saved.pass;CU=USERS.find(u=>u.id===saved.uid)||USERS[0];DEMO=false;
+  if(saved&&saved.user){
+    CU=saved.user;SESSION_PASSWORD=saved.pass||'';DEMO=!!saved.demo;AUTHED=!DEMO;
     document.getElementById('login-overlay').style.display='none';
     loadProgress();initApp();
+    if(!DEMO)loadRoster();   // refresh names in background so the avatar/list stays current
   }else{
     document.getElementById('login-pass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
+    document.getElementById('login-user').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
   }
 })();
 </script>
