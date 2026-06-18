@@ -264,7 +264,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);fon
         <span id="login-btn-text">Sign in</span>
       </button>
     </div>
-    <p class="login-note">Password is set in Netlify by Brandon.<br>Contact brandonf@callnatals.com if you need access.</p>
+    <p class="login-note">Password is set in Netlify by Brandon.<br>Contact <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="99fbebf8f7fdf6f7ffd9faf8f5f5f7f8edf8f5eab7faf6f4">[email&#160;protected]</a> if you need access.</p>
   </div>
 </div>
 
@@ -582,7 +582,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);fon
   </div>
 </div>
 
-<script>
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
 // Global error catcher — surfaces any JS errors to the login screen
 window.onerror = function(msg, src, line, col, err) {
   console.error('[GS ERROR]', msg, 'at', src, line + ':' + col);
@@ -774,7 +774,7 @@ async function loadLibrary() {
 async function checkEnvStatus() {
   const banner = document.getElementById('env-status-banner');
   try {
-    const res = await callClaude({ model:'claude-sonnet-4-6-20250514', max_tokens:10, messages:[{role:'user',content:'ping'}] });
+    const res = await callClaude({ model:'claude-sonnet-4-5', max_tokens:10, messages:[{role:'user',content:'ping'}] });
     if (res.content) {
       banner.innerHTML = '<div class="env-banner env-ok"><i class="ti ti-circle-check" aria-hidden="true"></i><div><strong>All systems connected.</strong> Anthropic API key is valid and working. Google Sheets proxy is active.</div></div>';
     } else {
@@ -913,7 +913,7 @@ RULES:
 
     // Call through Netlify proxy — key is server-side
     const data = await callClaude({
-      model: 'claude-sonnet-4-6-20250514',
+      model: 'claude-sonnet-4-5',
       max_tokens: 4000,
       messages: [{
         role: 'user',
@@ -1096,7 +1096,7 @@ async function checkConnections() {
 
   // Test Claude
   try {
-    const r = await callClaude({ model:'claude-sonnet-4-6-20250514', max_tokens:10, messages:[{role:'user',content:'ping'}] });
+    const r = await callClaude({ model:'claude-sonnet-4-5', max_tokens:10, messages:[{role:'user',content:'ping'}] });
     results.push({ name:'Anthropic API (ANTHROPIC_API_KEY)', ok:!!r.content, msg: r.content ? 'Connected' : 'Invalid response' });
   } catch(e) { results.push({ name:'Anthropic API (ANTHROPIC_API_KEY)', ok:false, msg:e.message }); }
 
