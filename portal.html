@@ -1,0 +1,914 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>The Golden Standard — Natal's</title>
+<!-- ============================================================
+     THE GOLDEN STANDARD — FIELD PORTAL  (v3.0)
+     Reads SOPs LIVE from the same Google Sheet the Admin tool
+     publishes to, via /.netlify/functions/sheet-proxy.
+     "Ask the AI" routes through /.netlify/functions/claude-proxy
+     (API key stays in Netlify — never in the browser).
+     Gated by SITE_PASSWORD (same as the Admin tool).
+     Deploy this file in the SAME Netlify site as the admin
+     index.html (e.g. as /portal.html) so the function paths and
+     the shared password resolve on the same origin.
+     ============================================================ -->
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600&family=DM+Sans:wght@400;500;600&family=Oswald:wght@500;600&family=Source+Sans+3:wght@400;500&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css"/>
+<style>
+:root{
+  --navy:#1A3A5C;--navy2:#234e7a;--navy-lt:#e8eef5;
+  --teal:#2BA99B;--teal-lt:#e1f5f2;
+  --gold:#F5A623;--gold-lt:#fef3e0;
+  --green:#3B6D11;--green-lt:#eaf3de;
+  --amber:#854F0B;--amber-lt:#faeeda;
+  --purple:#3C3489;--purple-lt:#eeedfe;
+  --red:#A32D2D;--red-lt:#fcebeb;
+  --text:#1a1a1a;--text2:#555;--text3:#999;
+  --border:#e2e0d8;--bg:#f4f2ed;--bgcard:#fff;--bgsurf:#f9f7f4;
+  --sidebar:260px;--topbar:56px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.6;height:100vh;overflow:hidden;display:flex;flex-direction:column}
+.topbar{height:var(--topbar);background:var(--navy);display:flex;align-items:center;flex-shrink:0;border-bottom:3px solid var(--gold);z-index:200}
+.topbar-brand{width:var(--sidebar);flex-shrink:0;display:flex;align-items:center;gap:10px;padding:0 18px;border-right:1px solid rgba(255,255,255,.08);height:100%}
+.logo-g{width:34px;height:34px;background:var(--gold);border-radius:8px;display:flex;align-items:center;justify-content:center;font-family:'Playfair Display',serif;font-size:16px;color:var(--navy);flex-shrink:0}
+.brand-name{font-family:'Playfair Display',serif;font-size:15px;color:#fff;line-height:1.1}
+.brand-tagline{font-size:10px;color:rgba(255,255,255,.4);font-family:'Oswald',sans-serif;letter-spacing:.08em;text-transform:uppercase}
+.topbar-search{flex:1;padding:0 16px;position:relative}
+.topbar-search input{width:100%;max-width:480px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);border-radius:20px;padding:7px 14px 7px 36px;font-family:'DM Sans',sans-serif;font-size:13px;color:#fff;outline:none;transition:background .15s,border-color .15s}
+.topbar-search input:focus{background:rgba(255,255,255,.18);border-color:rgba(255,255,255,.3)}
+.topbar-search input::placeholder{color:rgba(255,255,255,.4)}
+.ts-icon{position:absolute;left:28px;top:50%;transform:translateY(-50%);color:rgba(255,255,255,.4);font-size:14px;pointer-events:none}
+.topbar-right{display:flex;align-items:center;gap:10px;padding:0 18px;border-left:1px solid rgba(255,255,255,.08)}
+.notif-btn{width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,.1);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.6);font-size:15px;position:relative;transition:background .12s}
+.notif-btn:hover{background:rgba(255,255,255,.18)}
+.notif-dot{position:absolute;top:4px;right:4px;width:8px;height:8px;background:var(--gold);border-radius:50%;border:2px solid var(--navy)}
+.notif-btn.spinning i{animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.user-chip{display:flex;align-items:center;gap:8px;cursor:pointer}
+.user-avatar{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:#fff;flex-shrink:0}
+.user-name{font-size:12px;color:rgba(255,255,255,.8)}
+.layout{display:flex;flex:1;overflow:hidden}
+.sidebar{width:var(--sidebar);background:var(--bgcard);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto}
+.sidebar-section{padding:8px 0}
+.sidebar-label{font-family:'Oswald',sans-serif;font-size:10px;color:var(--text3);letter-spacing:.12em;text-transform:uppercase;padding:6px 16px 4px}
+.nav-item{display:flex;align-items:center;gap:9px;padding:8px 16px;cursor:pointer;font-size:13px;color:var(--text2);transition:background .12s,color .12s;border-left:3px solid transparent;user-select:none}
+.nav-item:hover{background:var(--bgsurf);color:var(--text)}
+.nav-item.active{background:var(--navy-lt);color:var(--navy);border-left-color:var(--gold);font-weight:500}
+.nav-item i{font-size:15px;flex-shrink:0}
+.nav-badge{margin-left:auto;font-size:10px;padding:1px 7px;border-radius:10px;font-weight:600}
+.nb-gold{background:var(--gold-lt);color:var(--amber);border:1px solid var(--gold)}
+.nb-teal{background:var(--teal-lt);color:var(--teal);border:1px solid var(--teal)}
+.nav-divider{height:1px;background:var(--border);margin:4px 0}
+.subject-nav-item{display:flex;align-items:center;gap:8px;padding:7px 16px;cursor:pointer;font-size:12px;color:var(--text2);transition:background .12s;user-select:none;border-left:3px solid transparent}
+.subject-nav-item:hover{background:var(--bgsurf);color:var(--text)}
+.subject-nav-item.active{background:var(--navy-lt);color:var(--navy);border-left-color:var(--teal);font-weight:500}
+.subj-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.subj-count{margin-left:auto;font-size:10px;color:var(--text3)}
+.sidebar-footer{margin-top:auto;padding:12px 16px;border-top:1px solid var(--border);font-size:10px;color:var(--text3);line-height:1.6}
+.sync-row{display:flex;align-items:center;gap:6px;padding:8px 16px;font-size:11px;color:var(--text3);font-family:'Source Sans 3',sans-serif;border-top:1px solid var(--border);cursor:pointer;transition:background .12s}
+.sync-row:hover{background:var(--bgsurf);color:var(--teal)}
+.sync-row i{font-size:13px}
+.sync-dot{width:7px;height:7px;border-radius:50%;background:var(--teal);flex-shrink:0}
+.sync-dot.demo{background:var(--gold)}
+.main{flex:1;overflow-y:auto;background:var(--bg)}
+.view{display:none}.view.active{display:block}
+.data-banner{margin:16px 32px 0;border-radius:10px;padding:11px 15px;display:flex;align-items:flex-start;gap:10px;font-family:'Source Sans 3',sans-serif;font-size:13px;line-height:1.5}
+.data-banner i{font-size:16px;flex-shrink:0;margin-top:1px}
+.db-demo{background:var(--gold-lt);color:#633806;border:1px solid var(--gold)}
+.db-demo i{color:var(--gold)}
+.db-demo strong{color:var(--amber)}
+/* HOME */
+.home-wrap{padding:28px 32px}
+.home-greeting{margin-bottom:20px}
+.hey{font-family:'Playfair Display',serif;font-size:26px;color:var(--navy);margin-bottom:4px}
+.hey-sub{font-size:14px;color:var(--text2);font-family:'Source Sans 3',sans-serif}
+.path-card{background:var(--bgcard);border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:20px;position:relative;overflow:hidden}
+.path-card::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg,var(--navy),var(--teal))}
+.path-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.path-title{font-size:15px;font-weight:600;color:var(--navy)}
+.path-pct{font-size:13px;font-weight:600;color:var(--teal)}
+.prog-bar{height:7px;background:var(--border);border-radius:4px;overflow:hidden;margin-bottom:14px}
+.prog-fill{height:100%;background:linear-gradient(90deg,var(--teal),var(--navy));border-radius:4px;transition:width .4s}
+.path-items{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px}
+.pi{background:var(--bgsurf);border:1px solid var(--border);border-radius:6px;padding:12px;cursor:pointer;transition:border-color .15s;display:flex;align-items:flex-start;gap:10px}
+.pi:hover{border-color:var(--teal)}
+.pi-icon{width:32px;height:32px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+.pi-title{font-size:12px;font-weight:500;color:var(--text);line-height:1.3;margin-bottom:2px}
+.pi-meta{font-size:11px;color:var(--text3);font-family:'Source Sans 3',sans-serif}
+.pi-status{font-size:10px;font-weight:500;padding:2px 7px;border-radius:8px;margin-top:5px;display:inline-block}
+.ps-done{background:var(--teal-lt);color:var(--teal)}
+.ps-open{background:var(--gold-lt);color:var(--amber)}
+.ps-soon{background:var(--bgsurf);color:var(--text3);border:1px solid var(--border)}
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+.stat-card{background:var(--bgcard);border:1px solid var(--border);border-radius:10px;padding:14px 16px}
+.stat-val{font-family:'Playfair Display',serif;font-size:28px;color:var(--navy);line-height:1;margin-bottom:2px}
+.stat-lbl{font-size:11px;color:var(--text3);font-family:'Source Sans 3',sans-serif;text-transform:uppercase;letter-spacing:.06em}
+.stat-sub{font-size:11px;color:var(--teal);margin-top:2px;font-weight:500}
+.section-card{background:var(--bgcard);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:16px}
+.sc-hdr{display:flex;align-items:center;gap:8px;padding:12px 18px;border-bottom:1px solid var(--border);font-size:13px;font-weight:600;color:var(--text)}
+.sc-hdr i{font-size:15px;color:var(--teal)}
+.sc-see-all{margin-left:auto;font-size:12px;color:var(--teal);cursor:pointer;font-weight:400}
+.feed-item{display:flex;align-items:center;gap:12px;padding:11px 18px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s}
+.feed-item:last-child{border-bottom:none}
+.feed-item:hover{background:var(--bgsurf)}
+.fi-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.fi-title{font-size:13px;font-weight:500;color:var(--text)}
+.fi-meta{font-size:11px;color:var(--text3);font-family:'Source Sans 3',sans-serif;margin-top:1px}
+.fi-badge{margin-left:auto;font-size:10px;padding:2px 8px;border-radius:10px;background:var(--gold-lt);color:var(--amber);border:1px solid var(--gold);white-space:nowrap}
+/* LIBRARY */
+.lib-wrap{padding:24px 32px}
+.lib-hdr{margin-bottom:18px}
+.lib-hdr h1{font-family:'Playfair Display',serif;font-size:22px;color:var(--navy);margin-bottom:4px}
+.lib-hdr p{font-size:13px;color:var(--text2);font-family:'Source Sans 3',sans-serif}
+.subj-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:12px}
+.subj-card{background:var(--bgcard);border:1px solid var(--border);border-radius:12px;overflow:hidden;cursor:pointer;transition:border-color .15s,box-shadow .15s,transform .1s}
+.subj-card:hover{border-color:var(--teal);box-shadow:0 4px 14px rgba(0,0,0,.08);transform:translateY(-1px)}
+.subj-card-bar{height:5px}
+.subj-card-body{padding:14px 16px}
+.sc-trade-label{font-family:'Oswald',sans-serif;font-size:10px;font-weight:500;letter-spacing:.1em;text-transform:uppercase;margin-bottom:5px}
+.sc-title{font-size:14px;font-weight:600;color:var(--text);margin-bottom:3px;line-height:1.3}
+.sc-desc{font-size:12px;color:var(--text2);font-family:'Source Sans 3',sans-serif;line-height:1.45;margin-bottom:10px}
+.sc-footer{display:flex;align-items:center;gap:8px}
+.sc-count{font-size:11px;color:var(--text3);font-family:'Source Sans 3',sans-serif}
+.sc-prog{flex:1;height:4px;background:var(--border);border-radius:2px;overflow:hidden}
+.sc-prog-fill{height:100%;border-radius:2px;transition:width .3s}
+.sc-pct{font-size:11px;font-weight:500;white-space:nowrap}
+/* TOPIC VIEW */
+.topic-wrap{padding:24px 32px;max-width:860px}
+.back-btn{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);cursor:pointer;background:none;border:1px solid var(--border);border-radius:6px;padding:5px 12px;margin-bottom:14px;transition:background .12s;font-family:'DM Sans',sans-serif}
+.back-btn:hover{background:var(--bgsurf)}
+.topic-hdr{margin-bottom:18px;padding-bottom:16px;border-bottom:1px solid var(--border)}
+.th-meta{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}
+.trade-pill{font-family:'Oswald',sans-serif;font-size:10px;font-weight:500;letter-spacing:.1em;text-transform:uppercase;padding:3px 10px;border-radius:20px}
+.tp-hvac{background:var(--navy-lt);color:var(--navy)}
+.tp-plumbing{background:var(--green-lt);color:var(--green)}
+.tp-electrical{background:var(--amber-lt);color:var(--amber)}
+.tp-csr{background:var(--purple-lt);color:var(--purple)}
+.topic-hdr h1{font-family:'Playfair Display',serif;font-size:22px;color:var(--navy);margin-bottom:5px;line-height:1.25}
+.th-desc{font-size:14px;color:var(--text2);font-family:'Source Sans 3',sans-serif;line-height:1.55}
+.chips{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.chip{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--text2);background:var(--bgsurf);border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-family:'Source Sans 3',sans-serif}
+.chip i{font-size:13px;color:var(--text3)}
+.op-bar{margin:14px 0;background:var(--bgsurf);border:1px solid var(--border);border-radius:10px;padding:11px 14px;display:flex;align-items:center;gap:12px}
+.op-lbl{font-size:12px;color:var(--text2);white-space:nowrap;font-family:'Source Sans 3',sans-serif}
+.op-track{flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden}
+.op-fill{height:100%;background:var(--teal);border-radius:3px;transition:width .3s}
+.op-pct{font-size:13px;font-weight:600;color:var(--teal);min-width:34px;text-align:right}
+.reset-link{font-size:11px;color:var(--text3);cursor:pointer;background:none;border:1px solid var(--border);border-radius:5px;padding:3px 8px;font-family:'DM Sans',sans-serif}
+.topic-list{display:flex;flex-direction:column;gap:10px}
+.tb{background:var(--bgcard);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.tb-hdr{display:flex;align-items:center;gap:11px;padding:13px 18px;cursor:pointer;transition:background .12s}
+.tb-hdr:hover{background:var(--bgsurf)}
+.tn{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex-shrink:0}
+.tn-n{background:var(--navy);color:#fff}
+.tn-t{background:var(--teal);color:#fff}
+.tn-g{background:var(--gold);color:var(--navy)}
+.tn-d{background:#333;color:#fff}
+.tb-title{font-size:14px;font-weight:600;color:var(--text);flex:1}
+.tb-time{font-size:11px;color:var(--text3);background:var(--bgsurf);border:1px solid var(--border);border-radius:10px;padding:2px 9px;font-family:'Source Sans 3',sans-serif;white-space:nowrap}
+.tb-done{font-size:10px;font-weight:500;padding:2px 8px;border-radius:10px;background:var(--teal-lt);color:var(--teal);white-space:nowrap}
+.tb-chev{color:var(--text3);font-size:16px;transition:transform .2s;flex-shrink:0}
+.tb-chev.open{transform:rotate(90deg)}
+.tb-body{display:none;border-top:1px solid var(--border)}
+.tb-body.open{display:block}
+.al{display:flex;gap:10px;align-items:flex-start;padding:10px 18px;font-family:'Source Sans 3',sans-serif;font-size:12.5px;line-height:1.5}
+.al i{font-size:15px;flex-shrink:0;margin-top:1px}
+.al-warn{background:var(--gold-lt);color:#633806;border-bottom:1px solid #FAC775}
+.al-warn i{color:var(--gold)}
+.al-info{background:var(--navy-lt);color:#0C447C;border-bottom:1px solid #B5D4F4}
+.al-info i{color:var(--navy)}
+.al-crit{background:var(--red-lt);color:var(--red);border-bottom:1px solid #F09595}
+.al-crit i{color:var(--red)}
+.ph-hdr{display:flex;align-items:center;gap:10px;padding:9px 18px;background:var(--bgsurf)}
+.ph-num{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex-shrink:0}
+.ph-title{font-size:13px;font-weight:600;color:var(--text)}
+.ph-time{margin-left:auto;font-size:11px;color:var(--text3);background:var(--bgcard);border:1px solid var(--border);border-radius:10px;padding:2px 9px;font-family:'Source Sans 3',sans-serif;white-space:nowrap}
+.step-list{padding:2px 0}
+.step-row{display:flex;align-items:flex-start;gap:11px;padding:9px 18px;border-bottom:1px solid var(--bgsurf);transition:background .1s}
+.step-row:last-child{border-bottom:none}
+.step-row:hover{background:var(--bgsurf)}
+.step-check{width:20px;height:20px;border-radius:5px;border:1.5px solid #ccc;flex-shrink:0;margin-top:1px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;background:#fff}
+.step-check:hover{border-color:var(--teal)}
+.step-check.checked{background:var(--teal);border-color:var(--teal)}
+.step-check.checked::after{content:'';width:5px;height:9px;border:2px solid #fff;border-top:none;border-left:none;transform:rotate(45deg) translate(-1px,-1px);display:block}
+.step-text{font-family:'Source Sans 3',sans-serif;font-size:13.5px;color:var(--text);line-height:1.5;flex:1}
+.step-text.done{text-decoration:line-through;color:var(--text3)}
+.step-note{font-size:11px;color:var(--text3);font-style:italic;display:block;margin-top:2px}
+.step-row.critical .step-text{color:var(--red);font-weight:600}
+.ack-wrap{margin:14px 18px}
+.ack-banner{background:var(--navy-lt);border:1px solid #b5d4f4;border-radius:10px;padding:14px 16px;display:flex;align-items:center;gap:14px}
+.ack-banner.acked{background:var(--teal-lt);border-color:var(--teal)}
+.ack-info{flex:1;font-family:'Source Sans 3',sans-serif;font-size:13px;color:var(--text2);line-height:1.5}
+.ack-info strong{color:var(--navy);display:block;margin-bottom:2px;font-size:14px}
+.ack-banner.acked .ack-info strong{color:var(--teal)}
+.ack-btn{background:var(--navy);color:#fff;border:none;border-radius:7px;padding:8px 18px;font-size:13px;font-weight:500;cursor:pointer;font-family:'DM Sans',sans-serif;white-space:nowrap;transition:background .15s;display:flex;align-items:center;gap:6px;flex-shrink:0}
+.ack-btn:hover{background:var(--navy2)}
+.ack-btn.acked-btn{background:var(--teal);cursor:default}
+/* PATHS */
+.paths-wrap{padding:24px 32px}
+.paths-wrap h1{font-family:'Playfair Display',serif;font-size:22px;color:var(--navy);margin-bottom:4px}
+.paths-sub{font-size:13px;color:var(--text2);font-family:'Source Sans 3',sans-serif;margin-bottom:16px}
+.role-tabs{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap}
+.role-tab{padding:6px 14px;border-radius:20px;font-size:12px;font-weight:500;cursor:pointer;border:1.5px solid var(--border);color:var(--text2);transition:all .15s;font-family:'DM Sans',sans-serif}
+.role-tab:hover{border-color:var(--teal);color:var(--teal)}
+.role-tab.active{background:var(--navy);color:#fff;border-color:var(--navy)}
+.path-block{background:var(--bgcard);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:14px}
+.pb-hdr{display:flex;align-items:center;gap:12px;padding:16px 20px;border-bottom:1px solid var(--border)}
+.pb-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.pb-role{font-size:15px;font-weight:600;color:var(--text)}
+.pb-desc{font-size:12px;color:var(--text3);font-family:'Source Sans 3',sans-serif}
+.pb-prog{margin-left:auto;text-align:right}
+.pb-pct{font-size:20px;font-weight:600;color:var(--teal);font-family:'Playfair Display',serif}
+.pb-lbl{font-size:10px;color:var(--text3);font-family:'Source Sans 3',sans-serif}
+.pb-steps{padding:12px 18px;display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:9px}
+.psi{display:flex;align-items:flex-start;gap:9px;padding:10px 12px;border:1px solid var(--border);border-radius:6px;cursor:pointer;transition:border-color .15s;background:var(--bgsurf)}
+.psi:hover{border-color:var(--teal);background:#fff}
+.psi-num{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex-shrink:0}
+.psi-title{font-size:12px;font-weight:500;color:var(--text);line-height:1.3;margin-bottom:2px}
+.psi-status{font-size:10px;font-weight:500;padding:1px 7px;border-radius:8px;display:inline-block}
+/* AI */
+.ai-wrap{padding:24px 32px;max-width:680px}
+.ai-wrap h1{font-family:'Playfair Display',serif;font-size:22px;color:var(--navy);margin-bottom:4px}
+.ai-sub{font-size:13px;color:var(--text2);font-family:'Source Sans 3',sans-serif;margin-bottom:16px}
+.ai-sugs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.ai-sug{background:var(--bgcard);border:1px solid var(--border);border-radius:20px;padding:6px 13px;font-size:12px;color:var(--text2);cursor:pointer;transition:border-color .15s,color .15s;font-family:'Source Sans 3',sans-serif}
+.ai-sug:hover{border-color:var(--teal);color:var(--teal)}
+.chat-box{background:var(--bgcard);border:1px solid var(--border);border-radius:12px;overflow:hidden;display:flex;flex-direction:column}
+.chat-msgs{min-height:240px;max-height:380px;padding:16px;overflow-y:auto;display:flex;flex-direction:column;gap:10px}
+.msg{max-width:85%;line-height:1.55;font-size:13.5px}
+.msg-u{align-self:flex-end;background:var(--navy);color:#fff;border-radius:12px 12px 2px 12px;padding:10px 14px;font-family:'Source Sans 3',sans-serif}
+.msg-a{align-self:flex-start;background:var(--bgsurf);border:1px solid var(--border);border-radius:12px 12px 12px 2px;padding:10px 14px;color:var(--text);font-family:'Source Sans 3',sans-serif}
+.ai-lbl{font-size:10px;font-weight:600;color:var(--teal);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;font-family:'Oswald',sans-serif}
+.chat-input{display:flex;gap:8px;padding:12px 14px;border-top:1px solid var(--border)}
+.chat-input input{flex:1;padding:9px 14px;border:1px solid var(--border);border-radius:20px;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);background:var(--bgsurf);outline:none;transition:border-color .15s}
+.chat-input input:focus{border-color:var(--teal);background:#fff}
+.chat-send{background:var(--navy);color:#fff;border:none;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:14px;flex-shrink:0}
+.chat-send:hover{background:var(--navy2)}
+.chat-send:disabled{opacity:.4;cursor:not-allowed}
+/* SEARCH */
+.search-view{padding:24px 32px}
+.search-view h2{font-family:'Playfair Display',serif;color:var(--navy);font-size:20px;margin-bottom:4px}
+.srch-sub{font-size:13px;color:var(--text2);margin-bottom:14px;font-family:'Source Sans 3',sans-serif}
+.sr{background:var(--bgcard);border:1px solid var(--border);border-radius:10px;padding:13px 17px;margin-bottom:9px;cursor:pointer;transition:border-color .12s}
+.sr:hover{border-color:var(--teal)}
+.sr-src{font-size:11px;color:var(--text3);margin-bottom:2px;font-family:'Source Sans 3',sans-serif}
+.sr-txt{font-size:13px;color:var(--text);line-height:1.45}
+.sr-txt mark{background:var(--gold-lt);color:var(--amber);padding:0 2px;border-radius:2px}
+.no-res{text-align:center;padding:36px;color:var(--text3);font-family:'Source Sans 3',sans-serif}
+.no-res i{font-size:34px;display:block;margin-bottom:10px}
+/* TOAST */
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--navy);color:#fff;padding:10px 18px;border-radius:8px;font-size:13px;display:flex;align-items:center;gap:8px;box-shadow:0 8px 28px rgba(0,0,0,.25);z-index:400;opacity:0;transition:transform .25s,opacity .25s;font-family:'DM Sans',sans-serif}
+.toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+.toast i{font-size:15px;color:var(--gold)}
+/* LOGIN */
+.login-overlay{position:fixed;inset:0;background:var(--navy);display:flex;align-items:center;justify-content:center;z-index:500;padding:20px}
+.login-box{background:#fff;border-radius:16px;padding:36px 34px;max-width:380px;width:100%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.35)}
+.login-box .logo-g{width:54px;height:54px;font-size:24px;border-radius:12px;margin:0 auto 14px}
+.login-box h2{font-family:'Playfair Display',serif;font-size:21px;color:var(--navy);margin-bottom:4px}
+.login-box p{font-size:13px;color:var(--text2);font-family:'Source Sans 3',sans-serif;line-height:1.5;margin-bottom:22px}
+.login-field{text-align:left;margin-bottom:13px}
+.login-field label{font-size:11px;font-weight:500;color:var(--text2);font-family:'Source Sans 3',sans-serif;text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:5px}
+.login-field input,.login-field select{width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:6px;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);background:var(--bgsurf);outline:none}
+.login-field input:focus,.login-field select:focus{border-color:var(--teal);background:#fff}
+.login-btn{width:100%;background:var(--navy);color:#fff;border:none;border-radius:8px;padding:11px;font-size:14px;font-weight:500;cursor:pointer;font-family:'DM Sans',sans-serif;display:flex;align-items:center;justify-content:center;gap:7px;margin-top:6px;transition:background .15s}
+.login-btn:hover{background:var(--navy2)}
+.login-btn:disabled{opacity:.6;cursor:not-allowed}
+.login-err{font-size:12px;color:var(--red);background:var(--red-lt);border:1px solid #F09595;border-radius:6px;padding:8px 12px;margin-top:12px;font-family:'Source Sans 3',sans-serif;text-align:left;display:none}
+.login-foot{font-size:11px;color:var(--text3);margin-top:14px;font-family:'Source Sans 3',sans-serif;line-height:1.5}
+::-webkit-scrollbar{width:5px}
+::-webkit-scrollbar-thumb{background:#ccc;border-radius:3px}
+@media(max-width:700px){
+  :root{--sidebar:0px}
+  .sidebar{display:none}
+  .topbar-brand{width:auto}
+  .home-wrap,.lib-wrap,.topic-wrap,.paths-wrap,.ai-wrap,.search-view{padding:14px}
+  .data-banner{margin:12px 14px 0}
+  .stats-row{grid-template-columns:1fr 1fr}
+  .path-items,.subj-grid,.pb-steps{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<!-- ░░ LOGIN GATE ░░ -->
+<div class="login-overlay" id="login-overlay">
+  <div class="login-box">
+    <div class="logo-g">G</div>
+    <h2>The Golden Standard</h2>
+    <p>Natal's field operations portal.<br/>Sign in to view current procedures.</p>
+    <div class="login-field">
+      <label>Your name</label>
+      <select id="login-user"></select>
+    </div>
+    <div class="login-field">
+      <label>Site password</label>
+      <input type="password" id="login-pass" placeholder="Enter site password" autocomplete="current-password"/>
+    </div>
+    <button class="login-btn" id="login-btn" onclick="doLogin()"><i class="ti ti-login" aria-hidden="true"></i> Sign in</button>
+    <div class="login-err" id="login-err"></div>
+    <div class="login-foot">Same password as the admin tool.<br/>Internal use only — Natal's managers &amp; techs.</div>
+  </div>
+</div>
+
+<header class="topbar">
+  <div class="topbar-brand">
+    <div class="logo-g">G</div>
+    <div><div class="brand-name">The Golden Standard</div><div class="brand-tagline">Natal's Operations</div></div>
+  </div>
+  <div class="topbar-search">
+    <i class="ti ti-search ts-icon" aria-hidden="true"></i>
+    <input type="text" id="gsearch" placeholder="Search procedures, steps, topics..." autocomplete="off"/>
+  </div>
+  <div class="topbar-right">
+    <button class="notif-btn" id="refresh-btn" onclick="manualRefresh()" title="Refresh now"><i class="ti ti-refresh" aria-hidden="true"></i></button>
+    <button class="notif-btn" onclick="goView('whats-new')" title="What's new"><i class="ti ti-bell" aria-hidden="true"></i><span class="notif-dot"></span></button>
+    <div class="user-chip" onclick="signOut()" title="Sign out">
+      <div class="user-avatar" id="u-av">BF</div>
+      <span class="user-name" id="u-nm">Brandon F.</span>
+    </div>
+  </div>
+</header>
+<div class="layout">
+<nav class="sidebar">
+  <div class="sidebar-section">
+    <div class="nav-item active" id="nav-home" onclick="goView('home',this)"><i class="ti ti-home"></i> Home</div>
+    <div class="nav-item" id="nav-paths" onclick="goView('paths',this)"><i class="ti ti-route"></i> My Training Path <span class="nav-badge nb-gold" id="path-badge">0</span></div>
+    <div class="nav-item" id="nav-ai" onclick="goView('ai',this)"><i class="ti ti-sparkles"></i> Ask the AI</div>
+  </div>
+  <div class="nav-divider"></div>
+  <div class="sidebar-section">
+    <div class="sidebar-label">Subjects</div>
+    <div id="subj-nav"></div>
+  </div>
+  <div class="nav-divider"></div>
+  <div class="sidebar-section">
+    <div class="sidebar-label">By trade</div>
+    <div class="nav-item" id="nav-hvac" onclick="filterLib('hvac',this)"><span class="subj-dot" style="background:var(--navy)"></span>HVAC<span class="subj-count" id="cnt-hvac">—</span></div>
+    <div class="nav-item" id="nav-plumbing" onclick="filterLib('plumbing',this)"><span class="subj-dot" style="background:var(--green)"></span>Plumbing<span class="subj-count" id="cnt-plumbing">—</span></div>
+    <div class="nav-item" id="nav-electrical" onclick="filterLib('electrical',this)"><span class="subj-dot" style="background:var(--amber)"></span>Electrical<span class="subj-count" id="cnt-electrical">—</span></div>
+    <div class="nav-item" id="nav-csr" onclick="filterLib('csr',this)"><span class="subj-dot" style="background:var(--purple)"></span>CSR / Office<span class="subj-count" id="cnt-csr">—</span></div>
+  </div>
+  <div class="sync-row" id="sync-row" onclick="manualRefresh()"><span class="sync-dot" id="sync-dot"></span><i class="ti ti-cloud" aria-hidden="true"></i><span id="sync-text">Syncing…</span></div>
+  <div class="sidebar-footer">Natal's AC, Plumbing &amp; Electric<br/>"Service Honoring the Golden Rule"<br/>Internal use only · v3.0</div>
+</nav>
+<main class="main" id="main">
+  <div class="view active" id="view-home">
+    <div class="home-wrap">
+      <div id="home-banner"></div>
+      <div class="home-greeting"><div class="hey" id="greeting"></div><div class="hey-sub" id="greeting-sub"></div></div>
+      <div class="path-card" id="home-path"></div>
+      <div class="stats-row" id="home-stats"></div>
+      <div class="section-card">
+        <div class="sc-hdr"><i class="ti ti-sparkles" aria-hidden="true"></i>Recently updated<span class="sc-see-all" onclick="goView('whats-new')">See all</span></div>
+        <div id="home-new"></div>
+      </div>
+      <div class="section-card">
+        <div class="sc-hdr"><i class="ti ti-books" aria-hidden="true"></i>All subjects<span class="sc-see-all" onclick="goView('library')">Browse library</span></div>
+        <div id="home-subjs"></div>
+      </div>
+    </div>
+  </div>
+  <div class="view" id="view-library"><div class="lib-wrap"><div class="lib-hdr"><h1 id="lib-title">Subject Library</h1><p id="lib-sub">All subjects across every trade. Click any card to see topics and procedures.</p></div><div class="subj-grid" id="subj-grid"></div></div></div>
+  <div class="view" id="view-topic"><div class="topic-wrap" id="topic-content"></div></div>
+  <div class="view" id="view-paths"><div class="paths-wrap"><h1>Training Paths</h1><p class="paths-sub">Role-based learning sequences. Complete and acknowledge topics to build toward full certification in your trade.</p><div class="role-tabs" id="role-tabs"></div><div id="paths-content"></div></div></div>
+  <div class="view" id="view-ai">
+    <div class="ai-wrap">
+      <h1>Ask the AI</h1>
+      <p class="ai-sub">Ask anything about Natal's procedures, standards, or job processes. Powered by Claude — searches across every live procedure in the portal.</p>
+      <div class="ai-sugs" id="ai-sugs"></div>
+      <div class="chat-box">
+        <div class="chat-msgs" id="chat-msgs">
+          <div class="msg msg-a"><div class="ai-lbl">Golden Standard AI</div>Hi! I'm trained on Natal's live procedures. Ask me anything — "What do I do when a customer isn't home?" or "Walk me through the GSM pitch."</div>
+        </div>
+        <div class="chat-input">
+          <input type="text" id="ai-in" placeholder="Ask about any Natal's procedure..." onkeydown="if(event.key==='Enter')sendAI()"/>
+          <button class="chat-send" id="ai-btn" onclick="sendAI()"><i class="ti ti-send" aria-hidden="true"></i></button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="view" id="view-search"><div class="search-view"><h2>Search results</h2><p class="srch-sub" id="srch-sub"></p><div id="srch-list"></div></div></div>
+  <div class="view" id="view-whats-new"><div class="lib-wrap"><div class="lib-hdr"><h1>What's New</h1><p>Recently added and updated procedures.</p></div><div id="new-full"></div></div></div>
+</main>
+</div>
+<div class="toast" id="toast"><i class="ti ti-cloud-check" aria-hidden="true"></i><span id="toast-text">Library updated</span></div>
+
+<script>
+/* ================================================================
+   THE GOLDEN STANDARD — FIELD PORTAL v3.0
+   Live data from the Google Sheet (via sheet-proxy) ·
+   AI via claude-proxy · SITE_PASSWORD gate · auto-refresh.
+   Hierarchy rendered: Subjects > Topics > Phases > Steps
+   ================================================================ */
+
+/* ── Backend endpoints (same Netlify site as the admin tool) ── */
+const FN_AUTH   = '/.netlify/functions/auth';
+const FN_SHEET  = '/.netlify/functions/sheet-proxy';
+const FN_CLAUDE = '/.netlify/functions/claude-proxy';
+const AI_MODEL  = 'claude-sonnet-4-5';
+const POLL_MS   = 60000;   // auto-refresh interval
+
+/* ── People (for greeting + training paths) ── */
+const USERS=[
+  {id:'brandon',name:'Brandon Flowers',init:'BF',role:'Marketing Director',trade:null,color:'#2BA99B'},
+  {id:'joe',name:'Joe Bravata',init:'JB',role:'HVAC Service Manager',trade:'hvac',color:'#1A3A5C'},
+  {id:'aaron',name:'Aaron Matthews',init:'AM',role:'HVAC Install Manager',trade:'hvac',color:'#234e7a'},
+  {id:'rodney',name:'Rodney Faucett',init:'RF',role:'Plumbing Manager',trade:'plumbing',color:'#3B6D11'},
+  {id:'darren',name:'Darren Bell',init:'DB',role:'Electrical Manager',trade:'electrical',color:'#854F0B'},
+  {id:'madison',name:'Madison Allen',init:'MA',role:'Office Manager',trade:'csr',color:'#3C3489'},
+];
+let CU=USERS[0];
+
+const TC={
+  hvac:{label:'HVAC',color:'#1A3A5C',pill:'tp-hvac',icon:'ti-wind'},
+  plumbing:{label:'Plumbing',color:'#3B6D11',pill:'tp-plumbing',icon:'ti-droplet'},
+  electrical:{label:'Electrical',color:'#854F0B',pill:'tp-electrical',icon:'ti-bolt'},
+  csr:{label:'CSR / Office',color:'#3C3489',pill:'tp-csr',icon:'ti-headset'},
+};
+const TYPE_ORDER=['Daily','Service','Install','Maintenance','Inbound','Membership','Safety'];
+
+/* ── Live model (filled from the sheet) ── */
+let SUBJECTS=[], PATHS=[], DEMO=false, SESSION_PASSWORD='', lastSig='';
+
+/* ── Per-user progress (persisted) ── */
+let CHK={}, ACKD={}, libFilter=null, pollTimer=null;
+
+function progKey(){return 'gs_portal_prog_'+CU.id;}
+function loadProgress(){try{const r=JSON.parse(localStorage.getItem(progKey())||'{}');CHK=r.CHK||{};ACKD=r.ACKD||{};}catch(e){CHK={};ACKD={};}}
+function saveProgress(){try{localStorage.setItem(progKey(),JSON.stringify({CHK,ACKD}));}catch(e){}}
+
+/* ════════════════════════════════════════════════════════════
+   AUTH
+   ════════════════════════════════════════════════════════════ */
+function buildUserSelect(){
+  document.getElementById('login-user').innerHTML=USERS.map(u=>`<option value="${u.id}">${u.name} — ${u.role}</option>`).join('');
+}
+async function doLogin(){
+  const uid=document.getElementById('login-user').value;
+  const pass=document.getElementById('login-pass').value;
+  const err=document.getElementById('login-err');const btn=document.getElementById('login-btn');
+  err.style.display='none';
+  if(!pass){err.textContent='Please enter the site password.';err.style.display='block';return;}
+  btn.disabled=true;btn.innerHTML='<i class="ti ti-loader" aria-hidden="true"></i> Signing in…';
+  try{
+    const res=await fetch(FN_AUTH,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pass})});
+    const data=await res.json().catch(()=>({}));
+    if(res.ok&&data.ok){
+      SESSION_PASSWORD=pass;CU=USERS.find(u=>u.id===uid)||USERS[0];DEMO=false;
+      try{sessionStorage.setItem('gs_portal_session',JSON.stringify({uid,pass}));}catch(e){}
+      enterApp();
+    }else if(res.status===401){
+      err.textContent='Incorrect password. Same password as the admin tool.';err.style.display='block';
+    }else{
+      // configError — let them know but allow in (backend will still gate data)
+      err.textContent=(data.error||'Login service not configured.')+' You can continue in preview mode.';err.style.display='block';
+      enterDemo(uid);
+    }
+  }catch(e){
+    // Auth function unreachable (e.g. opened off-Netlify) → preview/demo mode
+    enterDemo(uid);
+  }
+  btn.disabled=false;btn.innerHTML='<i class="ti ti-login" aria-hidden="true"></i> Sign in';
+}
+function enterDemo(uid){
+  DEMO=true;SESSION_PASSWORD='';CU=USERS.find(u=>u.id===uid)||USERS[0];
+  enterApp();
+}
+function enterApp(){
+  document.getElementById('login-overlay').style.display='none';
+  loadProgress();
+  initApp();
+}
+function signOut(){
+  try{sessionStorage.removeItem('gs_portal_session');}catch(e){}
+  if(pollTimer)clearInterval(pollTimer);
+  location.reload();
+}
+
+/* ════════════════════════════════════════════════════════════
+   BACKEND HELPERS
+   ════════════════════════════════════════════════════════════ */
+async function callSheet(method,body){
+  const opts={method,headers:{'Content-Type':'application/json','x-site-password':SESSION_PASSWORD}};
+  if(body)opts.body=JSON.stringify(body);
+  const res=await fetch(FN_SHEET,opts);
+  if(!res.ok){let e={};try{e=await res.json();}catch(_){}throw new Error(e.error||'Sheet proxy error '+res.status);}
+  return res.json();
+}
+async function callClaude(body){
+  const res=await fetch(FN_CLAUDE,{method:'POST',headers:{'Content-Type':'application/json','x-site-password':SESSION_PASSWORD},body:JSON.stringify(body)});
+  const txt=await res.text();let data={};try{data=JSON.parse(txt);}catch(_){data={raw:txt};}
+  if(!res.ok)throw new Error(data.error||data.message||('Claude proxy error '+res.status));
+  return data;
+}
+
+/* ════════════════════════════════════════════════════════════
+   LOAD + MODEL — turn flat sheet rows into Subjects>Topics
+   Admin row shape:
+   {id,title,trade,type,status,manager,duration,description,
+    phases_json,steps_count,updated,updated_by,version_note,...}
+   ════════════════════════════════════════════════════════════ */
+function tsOf(id){const m=String(id||'').match(/(\d{10,})$/);return m?parseInt(m[1]):0;}
+
+function rowsToModel(rows){
+  // Field portal shows LIVE procedures only.
+  const live=rows.filter(r=>r&&r.id&&(r.status||'').toLowerCase()==='live');
+  const recencyRank=live.slice().sort((a,b)=>tsOf(b.id)-tsOf(a.id)).slice(0,4).map(r=>r.id);
+  const groups={};
+  live.forEach(r=>{
+    const trade=(r.trade||'hvac').toLowerCase();
+    const type=r.type||'General';
+    const key=trade+'__'+type;
+    if(!groups[key])groups[key]={id:'subj-'+trade+'-'+type.toLowerCase().replace(/[^a-z0-9]+/g,'-'),trade,type,manager:r.manager||'—',updatedTs:0,updated:r.updated||'',isNew:false,topics:[]};
+    let phases=[];try{phases=JSON.parse(r.phases_json||'[]')||[];}catch(e){phases=[];}
+    const total=phases.reduce((a,p)=>a+((p.steps||[]).length),0);
+    groups[key].topics.push({
+      id:r.id,title:r.title||'Untitled',status:'live',desc:r.description||'',
+      duration:r.duration||'—',manager:r.manager||'—',
+      steps_total:total||parseInt(r.steps_count)||0,phases,ts:tsOf(r.id),isNew:recencyRank.includes(r.id)
+    });
+    const ts=tsOf(r.id);if(ts>groups[key].updatedTs){groups[key].updatedTs=ts;groups[key].updated=r.updated||groups[key].updated;}
+    if(recencyRank.includes(r.id))groups[key].isNew=true;
+  });
+  const subj=Object.values(groups).map(g=>{
+    g.topics.sort((a,b)=>a.ts-b.ts);
+    g.title=TC[g.trade].label+' '+g.type;
+    g.desc=`All ${g.type.toLowerCase()} procedures for ${TC[g.trade].label}. ${g.topics.length} live ${g.topics.length===1?'topic':'topics'}.`;
+    return g;
+  });
+  subj.sort((a,b)=>{
+    if(a.trade!==b.trade)return Object.keys(TC).indexOf(a.trade)-Object.keys(TC).indexOf(b.trade);
+    return TYPE_ORDER.indexOf(a.type)-TYPE_ORDER.indexOf(b.type);
+  });
+  return subj;
+}
+
+function buildPathsModel(){
+  // One training path per trade, in order, from that trade's live topics.
+  return Object.keys(TC).map(tr=>{
+    const topics=SUBJECTS.filter(s=>s.trade===tr).flatMap(s=>s.topics);
+    if(!topics.length)return null;
+    return {role:TC[tr].label+' Field Path',trade:tr,color:TC[tr].color,icon:TC[tr].icon,
+      desc:`Every current ${TC[tr].label} procedure — acknowledge each to stay certified.`,
+      topicIds:topics.map(t=>t.id)};
+  }).filter(Boolean);
+}
+
+function sigOf(subj){return subj.map(s=>s.topics.map(t=>t.id+':'+t.steps_total).join(',')).join('|');}
+
+async function loadLibrary(){
+  if(DEMO){SUBJECTS=SEED_SUBJECTS;PATHS=SEED_PATHS;return {ok:true,demo:true};}
+  try{
+    const data=await callSheet('GET');
+    const rows=Array.isArray(data)?data:[];
+    const model=rowsToModel(rows);
+    if(!model.length){
+      // Connected, but nothing published yet → show sample so the page isn't empty
+      SUBJECTS=SEED_SUBJECTS;PATHS=SEED_PATHS;return {ok:true,empty:true};
+    }
+    SUBJECTS=model;PATHS=buildPathsModel();return {ok:true};
+  }catch(e){
+    SUBJECTS=SEED_SUBJECTS;PATHS=SEED_PATHS;return {ok:false,error:e.message};
+  }
+}
+
+/* ════════════════════════════════════════════════════════════
+   APP INIT + AUTO-REFRESH
+   ════════════════════════════════════════════════════════════ */
+async function initApp(){
+  setSync('syncing');
+  const r=await loadLibrary();
+  lastSig=sigOf(SUBJECTS);
+  renderAll();
+  setSyncResult(r);
+  document.getElementById('gsearch').addEventListener('input',doSearch);
+  if(pollTimer)clearInterval(pollTimer);
+  if(!DEMO)pollTimer=setInterval(pollLibrary,POLL_MS);
+  window.addEventListener('focus',()=>{if(!DEMO)pollLibrary();});
+}
+function renderAll(){
+  setUser();buildSidebarSubjs();buildCounts();
+  buildStats();buildHomePath();buildNew();buildHomeSubjs();
+  buildLib(libFilter||null);buildPaths();buildAISugs();renderHomeBanner();
+}
+async function pollLibrary(){
+  if(DEMO)return;
+  try{
+    const data=await callSheet('GET');
+    const rows=Array.isArray(data)?data:[];
+    const model=rowsToModel(rows);
+    const next=model.length?model:SEED_SUBJECTS;
+    const sig=sigOf(next);
+    if(sig!==lastSig){
+      SUBJECTS=next;PATHS=model.length?buildPathsModel():SEED_PATHS;lastSig=sig;
+      renderAll();showToast('Library updated — new content from the admin tool');
+    }
+    setSync('ok');
+  }catch(e){setSync('err');}
+}
+async function manualRefresh(){
+  const b=document.getElementById('refresh-btn');b.classList.add('spinning');setSync('syncing');
+  const r=await loadLibrary();const sig=sigOf(SUBJECTS);
+  if(sig!==lastSig){lastSig=sig;showToast('Library updated');}
+  renderAll();setSyncResult(r);
+  setTimeout(()=>b.classList.remove('spinning'),500);
+}
+function setSync(state){
+  const t=document.getElementById('sync-text'),d=document.getElementById('sync-dot');
+  if(state==='syncing'){t.textContent='Syncing…';d.classList.remove('demo');}
+  else if(state==='ok'){t.textContent='Live · synced '+nowTime();d.classList.remove('demo');}
+  else if(state==='err'){t.textContent='Offline — tap to retry';d.classList.add('demo');}
+}
+function setSyncResult(r){
+  const d=document.getElementById('sync-dot');
+  if(DEMO){document.getElementById('sync-text').textContent='Preview mode (no backend)';d.classList.add('demo');}
+  else if(r&&r.ok){setSync('ok');}
+  else{setSync('err');}
+}
+function nowTime(){return new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});}
+function showToast(msg){const t=document.getElementById('toast');document.getElementById('toast-text').textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),3200);}
+function renderHomeBanner(){
+  const el=document.getElementById('home-banner');
+  if(DEMO){el.innerHTML='<div class="data-banner db-demo"><i class="ti ti-eye" aria-hidden="true"></i><div><strong>Preview mode.</strong> Showing sample content — not connected to the live Google Sheet. Deploy this file on your Netlify site (alongside the admin tool) and sign in with the site password to see real published SOPs.</div></div>';}
+  else if(SUBJECTS===SEED_SUBJECTS){el.innerHTML='<div class="data-banner db-demo"><i class="ti ti-info-circle" aria-hidden="true"></i><div><strong>No live SOPs yet.</strong> Showing sample content. Once a manager publishes an SOP as <strong>Live</strong> in the admin tool, it appears here automatically.</div></div>';}
+  else el.innerHTML='';
+}
+
+/* ════════════════════════════════════════════════════════════
+   HELPERS + RENDER  (operate on SUBJECTS/PATHS)
+   ════════════════════════════════════════════════════════════ */
+function getT(id){for(const s of SUBJECTS)for(const t of s.topics)if(t.id===id)return t;return null;}
+function getS(tid){return SUBJECTS.find(s=>s.topics.some(t=>t.id===tid));}
+function totalSteps(t){return(t.phases||[]).reduce((a,p)=>a+(p.steps||[]).length,0);}
+function doneSteps(tid){return Object.values(CHK[tid]||{}).filter(Boolean).length;}
+function getPct(tid,t){const tot=totalSteps(t);return tot?Math.round((doneSteps(tid)/tot)*100):0;}
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+function setUser(){
+  const h=new Date().getHours();const g=h<12?'Good morning':h<17?'Good afternoon':'Good evening';
+  document.getElementById('greeting').textContent=g+', '+CU.name.split(' ')[0]+'.';
+  document.getElementById('greeting-sub').textContent='You have '+getMyTodo()+' topics to complete in your training path.';
+  document.getElementById('u-av').textContent=CU.init;document.getElementById('u-av').style.background=CU.color;
+  document.getElementById('u-nm').textContent=CU.name.split(' ')[0]+' '+(CU.name.split(' ')[1]||' ')[0]+'.';
+}
+function getMyTodo(){const p=CU.trade?PATHS.find(p=>p.trade===CU.trade):PATHS[0];if(!p)return 0;return p.topicIds.map(id=>getT(id)).filter(t=>t&&!ACKD[t.id]).length;}
+
+function buildSidebarSubjs(ft){
+  const s=ft?SUBJECTS.filter(s=>s.trade===ft):SUBJECTS;
+  document.getElementById('subj-nav').innerHTML=s.map(subj=>{const tc=TC[subj.trade];
+    return`<div class="subject-nav-item" onclick="openSubj('${subj.id}')" id="sn-${subj.id}"><span class="subj-dot" style="background:${tc.color}"></span><span style="flex:1;font-size:12px">${esc(subj.title)}</span><span class="subj-count">${subj.topics.length}</span></div>`;}).join('')
+    ||'<div style="padding:8px 16px;font-size:11px;color:var(--text3);font-family:\'Source Sans 3\',sans-serif">No subjects yet</div>';
+}
+function buildCounts(){['hvac','plumbing','electrical','csr'].forEach(t=>{const n=SUBJECTS.filter(s=>s.trade===t).reduce((a,s)=>a+s.topics.length,0);document.getElementById('cnt-'+t).textContent=n;});}
+
+function buildStats(){
+  const live=SUBJECTS.reduce((a,s)=>a+s.topics.length,0);
+  const steps=SUBJECTS.reduce((a,s)=>a+s.topics.reduce((b,t)=>b+(t.steps_total||0),0),0);
+  const ackedN=Object.values(ACKD).filter(Boolean).length;
+  const subjN=SUBJECTS.length;
+  document.getElementById('home-stats').innerHTML=
+    `<div class="stat-card"><div class="stat-val">${live}</div><div class="stat-lbl">Live procedures</div><div class="stat-sub">Ready to use</div></div>`+
+    `<div class="stat-card"><div class="stat-val">${subjN}</div><div class="stat-lbl">Subjects</div><div class="stat-sub">Across all trades</div></div>`+
+    `<div class="stat-card"><div class="stat-val">${steps}</div><div class="stat-lbl">Documented steps</div><div class="stat-sub">Across live topics</div></div>`+
+    `<div class="stat-card"><div class="stat-val">${ackedN}</div><div class="stat-lbl">Acknowledged</div><div class="stat-sub">By ${esc(CU.name.split(' ')[0])}</div></div>`;
+}
+
+function buildHomePath(){
+  const path=CU.trade?PATHS.find(p=>p.trade===CU.trade):PATHS[0];
+  if(!path){document.getElementById('home-path').innerHTML='<div class="path-hdr"><div class="path-title">No training path yet</div></div><div style="font-size:13px;color:var(--text3);font-family:\'Source Sans 3\',sans-serif">Procedures published for your trade will appear here as a guided path.</div>';document.getElementById('path-badge').textContent='0';return;}
+  const topics=path.topicIds.map(id=>getT(id)).filter(Boolean);
+  const done=topics.filter(t=>ACKD[t.id]).length;
+  const pct=topics.length?Math.round((done/topics.length)*100):0;
+  document.getElementById('path-badge').textContent=topics.length-done;
+  document.getElementById('home-path').innerHTML=
+    `<div class="path-hdr"><div class="path-title">My Training Path — ${esc(path.role)}</div><div class="path-pct">${pct}% complete</div></div>`+
+    `<div class="prog-bar"><div class="prog-fill" style="width:${pct}%"></div></div>`+
+    `<div class="path-items">${topics.map(t=>{const s=getS(t.id);const tc=s?TC[s.trade]:TC.hvac;const ak=!!ACKD[t.id];
+      return`<div class="pi" onclick="openTopic('${t.id}')"><div class="pi-icon" style="background:${tc.color}18"><i class="ti ${tc.icon}" style="color:${tc.color}"></i></div><div><div class="pi-title">${esc(t.title)}</div><div class="pi-meta">${esc(t.duration)}</div><span class="pi-status ${ak?'ps-done':'ps-open'}">${ak?'✓ Done':'Open'}</span></div></div>`;}).join('')}</div>`;
+}
+
+function buildNew(){
+  const items=[];SUBJECTS.forEach(s=>s.topics.filter(t=>t.isNew).forEach(t=>items.push({s,t})));
+  items.sort((a,b)=>(b.t.ts||0)-(a.t.ts||0));
+  const html=items.slice(0,4).map(({s,t})=>{const tc=TC[s.trade];
+    return`<div class="feed-item" onclick="openTopic('${t.id}')"><span class="fi-dot" style="background:${tc.color}"></span><div><div class="fi-title">${esc(t.title)}</div><div class="fi-meta">${tc.label} · ${esc(s.manager)} · ${esc(s.updated)}</div></div><span class="fi-badge">New</span></div>`;}).join('');
+  document.getElementById('home-new').innerHTML=html||'<div style="padding:14px;text-align:center;font-size:13px;color:var(--text3)">All up to date.</div>';
+  document.getElementById('new-full').innerHTML=items.length?items.map(({s,t})=>{const tc=TC[s.trade];
+    return`<div class="feed-item" style="background:var(--bgcard);border:1px solid var(--border);border-radius:10px;margin-bottom:8px" onclick="openTopic('${t.id}')"><span class="fi-dot" style="background:${tc.color}"></span><div><div class="fi-title">${esc(t.title)}</div><div class="fi-meta">${tc.label} · ${esc(s.title)} · ${esc(s.manager)} · Updated ${esc(s.updated)}</div></div><span class="fi-badge">New</span></div>`;}).join(''):'<div style="padding:24px;text-align:center;color:var(--text3);font-family:\'Source Sans 3\',sans-serif">Nothing new right now.</div>';
+}
+
+function buildHomeSubjs(){
+  document.getElementById('home-subjs').innerHTML=SUBJECTS.slice(0,6).map(s=>{const tc=TC[s.trade];
+    return`<div class="feed-item" onclick="openSubj('${s.id}')"><span class="fi-dot" style="background:${tc.color}"></span><div><div class="fi-title">${esc(s.title)}</div><div class="fi-meta">${tc.label} · ${esc(s.manager)} · ${s.topics.length} ${s.topics.length===1?'topic':'topics'}</div></div><i class="ti ti-chevron-right" style="color:var(--text3);font-size:14px;margin-left:auto"></i></div>`;}).join('')
+    ||'<div style="padding:18px;text-align:center;color:var(--text3);font-family:\'Source Sans 3\',sans-serif">No subjects yet.</div>';
+}
+
+function buildLib(ft){
+  const subjs=ft?SUBJECTS.filter(s=>s.trade===ft):SUBJECTS;
+  const tcc=ft?TC[ft]:null;
+  document.getElementById('lib-title').textContent=tcc?tcc.label+' Subjects':'Subject Library';
+  document.getElementById('lib-sub').textContent=tcc?`All ${tcc.label} subjects. Click to open.`:'All subjects across every trade. Click any card to see topics and procedures.';
+  document.getElementById('subj-grid').innerHTML=subjs.map(s=>{const tc=TC[s.trade];const tot=s.topics.length;const acked=s.topics.filter(t=>ACKD[t.id]).length;const pct=tot?Math.round((acked/tot)*100):0;
+    return`<div class="subj-card" onclick="openSubj('${s.id}')"><div class="subj-card-bar" style="background:${tc.color}"></div><div class="subj-card-body"><div class="sc-trade-label" style="color:${tc.color}">${tc.label} · ${esc(s.type)}</div><div class="sc-title">${esc(s.title)}</div><div class="sc-desc">${esc(s.desc)}</div><div class="sc-footer"><span class="sc-count">${tot} ${tot===1?'topic':'topics'}</span><div class="sc-prog"><div class="sc-prog-fill" style="width:${pct}%;background:${tc.color}"></div></div><span class="sc-pct" style="color:${tc.color}">${pct}%</span></div></div></div>`;}).join('')
+    ||'<div class="no-res"><i class="ti ti-folder-off" aria-hidden="true"></i>No subjects in this trade yet.</div>';
+}
+
+function openSubj(sid){
+  const subj=SUBJECTS.find(s=>s.id===sid);if(!subj)return;
+  const tc=TC[subj.trade];const ackedN=subj.topics.filter(t=>ACKD[t.id]).length;const pct=subj.topics.length?Math.round((ackedN/subj.topics.length)*100):0;
+  const NC=['tn-n','tn-t','tn-g','tn-d'];
+  let html=`<button class="back-btn" onclick="goBack()"><i class="ti ti-arrow-left" style="font-size:13px"></i> Back to library</button>
+  <div class="topic-hdr">
+    <div class="th-meta"><span class="trade-pill ${tc.pill}">${tc.label} · ${esc(subj.type)}</span><span style="font-size:11px;color:var(--text3);font-family:'Source Sans 3',sans-serif">Updated ${esc(subj.updated)}</span></div>
+    <h1>${esc(subj.title)}</h1><p class="th-desc">${esc(subj.desc)}</p>
+    <div class="chips"><span class="chip"><i class="ti ti-files" aria-hidden="true"></i>${subj.topics.length} ${subj.topics.length===1?'topic':'topics'}</span><span class="chip"><i class="ti ti-user" aria-hidden="true"></i>${esc(subj.manager)}</span></div>
+    <div class="op-bar"><span class="op-lbl">Your completion</span><div class="op-track"><div class="op-fill" style="width:${pct}%"></div></div><span class="op-pct">${pct}%</span></div>
+  </div>
+  <div class="topic-list">`;
+  subj.topics.forEach((t,ti)=>{
+    const ak=!!ACKD[t.id];const cn=NC[ti%4];const spct=getPct(t.id,t);
+    html+=`<div class="tb" id="tb-${t.id}">
+      <div class="tb-hdr" onclick="toggleTb('${t.id}')">
+        <div class="tn ${cn}">${ti+1}</div><div class="tb-title">${esc(t.title)}</div>
+        ${ak?'<span class="tb-done">✓ Acknowledged</span>':`<span style="font-size:11px;color:var(--teal)">${spct}%</span>`}
+        <span class="tb-time"><i class="ti ti-clock" style="font-size:11px;margin-right:2px" aria-hidden="true"></i>${esc(t.duration)}</span>
+        <i class="ti ti-chevron-right tb-chev" id="chev-${t.id}" aria-hidden="true"></i>
+      </div>
+      <div class="tb-body" id="tbd-${t.id}">${buildTbody(t)}</div>
+    </div>`;
+  });
+  html+='</div>';
+  document.getElementById('topic-content').innerHTML=html;
+  goView('topic');document.getElementById('main').scrollTop=0;
+  document.querySelectorAll('.subject-nav-item').forEach(e=>e.classList.remove('active'));
+  const sn=document.getElementById('sn-'+sid);if(sn)sn.classList.add('active');
+}
+
+function buildTbody(t){
+  const tot=totalSteps(t);const done=doneSteps(t.id);const pct=tot?Math.round((done/tot)*100):0;const ak=!!ACKD[t.id];
+  let h=`<div style="padding:10px 18px 4px">${t.desc?`<p style="font-family:'Source Sans 3',sans-serif;font-size:13px;color:var(--text2);line-height:1.5;margin-bottom:10px">${esc(t.desc)}</p>`:''}<div class="op-bar" style="margin:0"><span class="op-lbl">Progress</span><div class="op-track"><div class="op-fill" id="sf-${t.id}" style="width:${pct}%"></div></div><span class="op-pct" id="sp-${t.id}">${pct}%</span><button class="reset-link" onclick="resetT('${t.id}',event)">Reset</button></div></div>`;
+  if(!(t.phases||[]).length){h+=`<div style="padding:18px;text-align:center;color:var(--text3);font-family:'Source Sans 3',sans-serif;font-size:13px">No steps recorded for this procedure.</div>`;}
+  (t.phases||[]).forEach((ph,pi)=>{
+    const pc=ph.color==='navy'?'var(--navy)':ph.color==='teal'?'var(--teal)':ph.color==='gold'?'var(--gold)':'#333';
+    h+=`<div style="border-top:1px solid var(--border)">
+      <div class="ph-hdr"><div class="ph-num" style="background:${pc};color:${ph.color==='gold'?'var(--navy)':'#fff'}">${pi+1}</div><span class="ph-title">${esc(ph.title)}</span>${ph.time?`<span class="ph-time"><i class="ti ti-clock" style="font-size:11px;margin-right:2px" aria-hidden="true"></i>${esc(ph.time)}</span>`:''}</div>
+      ${(ph.alerts||[]).map(a=>`<div class="al al-${a.type==='crit'?'crit':a.type==='info'?'info':'warn'}"><i class="ti ti-${a.type==='warn'?'alert-triangle':a.type==='crit'?'alert-octagon':'info-circle'}" aria-hidden="true"></i>${esc(a.text)}</div>`).join('')}
+      <div class="step-list">${(ph.steps||[]).map((st,si)=>{const key=pi+'_'+si;const chk=!!((CHK[t.id]||{})[key]);
+        return`<div class="step-row ${st.critical?'critical':''}" id="sr-${t.id}-${pi}-${si}"><div class="step-check ${chk?'checked':''}" role="checkbox" aria-checked="${chk}" tabindex="0" onclick="ckStep('${t.id}',${pi},${si})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();ckStep('${t.id}',${pi},${si});}"></div><div><span class="step-text ${chk?'done':''}">${esc(st.text)}</span>${st.note?`<span class="step-note">${esc(st.note)}</span>`:''}</div></div>`;}).join('')}
+      </div></div>`;
+  });
+  h+=`<div class="ack-wrap"><div class="ack-banner ${ak?'acked':''}" id="ab-${t.id}"><div class="ack-info"><strong>${ak?'✓ You acknowledged this topic':'Mark as complete'}</strong>${ak?'You confirmed you understand this procedure.':'Confirm you have read and understand this procedure. Logged against your profile.'}</div><button class="ack-btn ${ak?'acked-btn':''}" id="ab-btn-${t.id}" onclick="doAck('${t.id}')">${ak?'<i class="ti ti-check" style="font-size:14px" aria-hidden="true"></i> Acknowledged':'<i class="ti ti-signature" style="font-size:14px" aria-hidden="true"></i> Acknowledge'}</button></div></div>`;
+  return h;
+}
+
+function toggleTb(tid){
+  const b=document.getElementById('tbd-'+tid),c=document.getElementById('chev-'+tid);
+  if(!b)return;const o=b.classList.contains('open');b.classList.toggle('open',!o);if(c)c.classList.toggle('open',!o);
+}
+function ckStep(tid,pi,si){
+  if(!CHK[tid])CHK[tid]={};const k=pi+'_'+si;CHK[tid][k]=!CHK[tid][k];
+  const row=document.getElementById(`sr-${tid}-${pi}-${si}`);
+  if(row){row.querySelector('.step-check').classList.toggle('checked',CHK[tid][k]);row.querySelector('.step-check').setAttribute('aria-checked',CHK[tid][k]?'true':'false');row.querySelector('.step-text').classList.toggle('done',CHK[tid][k]);}
+  updProg(tid);saveProgress();
+}
+function updProg(tid){const t=getT(tid);if(!t)return;const tot=totalSteps(t);const done=Object.values(CHK[tid]||{}).filter(Boolean).length;const pct=tot?Math.round((done/tot)*100):0;const f=document.getElementById('sf-'+tid),p=document.getElementById('sp-'+tid);if(f)f.style.width=pct+'%';if(p)p.textContent=pct+'%';}
+function resetT(tid,e){if(e)e.stopPropagation();CHK[tid]={};ACKD[tid]=false;const b=document.getElementById('tbd-'+tid);const t=getT(tid);if(b&&t)b.innerHTML=buildTbody(t);saveProgress();buildStats();buildHomePath();}
+function doAck(tid){if(ACKD[tid])return;ACKD[tid]=true;saveProgress();const b=document.getElementById('ab-'+tid);const btn=document.getElementById('ab-btn-'+tid);if(b){b.classList.add('acked');b.querySelector('.ack-info strong').textContent='✓ You acknowledged this topic';b.querySelector('.ack-info').childNodes[1].textContent='You confirmed you understand this procedure.';}if(btn){btn.classList.add('acked-btn');btn.innerHTML='<i class="ti ti-check" style="font-size:14px" aria-hidden="true"></i> Acknowledged';}buildStats();buildHomePath();}
+
+function openTopic(tid){
+  const s=getS(tid);if(s){openSubj(s.id);setTimeout(()=>{const b=document.getElementById('tb-'+tid);if(b){b.scrollIntoView({block:'start'});toggleTb(tid);}},150);}
+}
+function goBack(){goView('library');buildLib(libFilter||null);}
+function filterLib(t,el){libFilter=t;buildLib(t);buildSidebarSubjs(t);goView('library',el);}
+
+function buildPaths(ft){
+  const paths=ft?PATHS.filter(p=>p.trade===ft):PATHS;
+  document.getElementById('role-tabs').innerHTML=`<div class="role-tab active" onclick="buildPaths();setActivTab(this)">All roles</div>`+
+    PATHS.map(p=>`<div class="role-tab" onclick="buildPaths('${p.trade}');setActivTab(this)">${esc(p.role)}</div>`).join('');
+  document.getElementById('paths-content').innerHTML=paths.map(path=>{
+    const topics=path.topicIds.map(id=>getT(id)).filter(Boolean);
+    const done=topics.filter(t=>ACKD[t.id]).length;const pct=topics.length?Math.round((done/topics.length)*100):0;
+    return`<div class="path-block"><div class="pb-hdr"><div class="pb-icon" style="background:${path.color}18"><i class="ti ${path.icon}" style="font-size:18px;color:${path.color}"></i></div><div><div class="pb-role">${esc(path.role)}</div><div class="pb-desc">${esc(path.desc)}</div></div><div class="pb-prog"><div class="pb-pct">${pct}%</div><div class="pb-lbl">complete</div></div></div>
+    <div class="pb-steps">${topics.map((t,idx)=>{const s=getS(t.id);const tc=s?TC[s.trade]:TC.hvac;const ak=!!ACKD[t.id];
+      return`<div class="psi" onclick="openTopic('${t.id}')"><div class="psi-num" style="background:${ak?'var(--teal)':tc.color}18;color:${ak?'var(--teal)':tc.color}">${idx+1}</div><div><div class="psi-title">${esc(t.title)}</div><span class="psi-status ${ak?'ps-done':'ps-open'}">${ak?'✓ Done':'Open'}</span></div></div>`;}).join('')}
+    </div></div>`;}).join('')||'<div class="no-res"><i class="ti ti-route-off" aria-hidden="true"></i>No training paths yet — publish procedures in the admin tool.</div>';
+}
+function setActivTab(el){document.querySelectorAll('.role-tab').forEach(t=>t.classList.remove('active'));el.classList.add('active');}
+
+function buildAISugs(){const S=['What do I do when a customer isn\'t home?','Walk me through the GSM pitch','When do I call dispatch vs my manager?','What photos are required on an install?','Booties — when are they required?'];document.getElementById('ai-sugs').innerHTML=S.map(s=>`<div class="ai-sug" onclick="askAI(this.textContent)">${s}</div>`).join('');}
+function askAI(q){document.getElementById('ai-in').value=q;sendAI();}
+async function sendAI(){
+  const inp=document.getElementById('ai-in');const q=inp.value.trim();if(!q)return;inp.value='';
+  document.getElementById('ai-btn').disabled=true;addMsg(q,'u');addMsg('…','a','thinking');
+  if(DEMO){rmThinking();addMsg("I'm not connected in preview mode. Deploy the portal on your Netlify site and sign in with the site password — then I'll answer from your live procedures.",'a');document.getElementById('ai-btn').disabled=false;return;}
+  const ctx=SUBJECTS.flatMap(s=>s.topics.map(t=>`[${t.title}]: ${t.desc} ${(t.phases||[]).flatMap(p=>(p.steps||[]).map(x=>x.text)).join(' | ')}`)).join('\n').slice(0,12000);
+  try{
+    const d=await callClaude({model:AI_MODEL,max_tokens:700,system:`You are the Golden Standard AI for Natal's AC, Plumbing & Electric in New Orleans. Answer questions about Natal's procedures directly and practically, citing the relevant procedure name when useful. Key facts: GSM membership $249/unit/year, never discounted. $90 diagnostic fee applies to all repairs. Booties required on every home visit. All photos uploaded into ServiceTitan before the invoice is signed. If the answer isn't in the procedures below, say so and give the best general guidance. LIVE SOP LIBRARY:\n${ctx}`,messages:[{role:'user',content:q}]});
+    rmThinking();addMsg((d.content||[]).map(b=>b.text||'').join('')||'No response.','a');
+  }catch(e){rmThinking();addMsg('Connection issue — '+e.message,'a');}
+  document.getElementById('ai-btn').disabled=false;
+}
+function addMsg(txt,role,id){const el=document.createElement('div');el.className=`msg msg-${role}`;if(id)el.id='msg-'+id;if(role==='a')el.innerHTML=`<div class="ai-lbl">Golden Standard AI</div>${esc(txt).replace(/\n/g,'<br>')}`;else el.textContent=txt;const m=document.getElementById('chat-msgs');m.appendChild(el);m.scrollTop=m.scrollHeight;}
+function rmThinking(){const e=document.getElementById('msg-thinking');if(e)e.remove();}
+
+function doSearch(e){
+  const q=e.target.value.trim().toLowerCase();if(!q){goView('home',document.getElementById('nav-home'));return;}
+  const res=[];SUBJECTS.forEach(s=>s.topics.forEach(t=>{
+    if(t.title.toLowerCase().includes(q)||(t.desc||'').toLowerCase().includes(q))res.push({s,t,doc:true});
+    (t.phases||[]).forEach(ph=>(ph.steps||[]).forEach(st=>{if(st.text.toLowerCase().includes(q)||(st.note&&st.note.toLowerCase().includes(q)))res.push({s,t,ph,st});}));
+  }));
+  const hi=str=>esc(str).replace(new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi'),m=>`<mark>${m}</mark>`);
+  document.getElementById('srch-sub').textContent=`${res.length} result${res.length!==1?'s':''} for "${e.target.value.trim()}"`;
+  document.getElementById('srch-list').innerHTML=res.length?res.slice(0,25).map(r=>{const tc=TC[r.s.trade];
+    return`<div class="sr" onclick="openTopic('${r.t.id}')"><div class="sr-src" style="color:${tc.color}">${esc(r.s.title)} › ${esc(r.t.title)}${r.ph?' › '+esc(r.ph.title):''}</div><div class="sr-txt">${hi(r.doc?(r.t.desc||r.t.title):r.st.text)}</div></div>`;}).join('')
+    :`<div class="no-res"><i class="ti ti-search" aria-hidden="true"></i>No results for "<strong>${esc(e.target.value.trim())}</strong>"</div>`;
+  goView('search');setNav('');
+}
+
+function goView(id,navEl){
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  const el=document.getElementById('view-'+id);if(el)el.classList.add('active');
+  if(navEl)setNav(navEl.id||'');
+  document.getElementById('main').scrollTop=0;
+  if(id==='library')buildLib(libFilter||null);
+  if(id==='paths')buildPaths();
+  if(id==='home'){buildStats();buildHomePath();renderHomeBanner();}
+}
+function setNav(id){document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));if(id){const e=document.getElementById(id);if(e)e.classList.add('active');}}
+
+/* ════════════════════════════════════════════════════════════
+   SEED / SAMPLE DATA — shown only in preview mode or before
+   the first SOP is published live. Real data comes from the sheet.
+   ════════════════════════════════════════════════════════════ */
+const SEED_SUBJECTS=[
+  {id:'hvac-daily',title:'HVAC Daily Operations',trade:'hvac',type:'Daily',manager:'Joe Bravata',desc:'Start-of-day, end-of-day, and van management procedures.',updated:'June 2026',isNew:true,topics:[
+    {id:'hvac-morning',title:'Morning Routine & Truck Load',desc:'Complete before leaving the shop every morning.',duration:'30 min',manager:'Joe Bravata',steps_total:8,isNew:true,ts:1,phases:[{title:'Shop arrival & prep',color:'navy',time:'7:00 AM',steps:[
+      {text:'Arrive at shop by 7:00 AM unless dispatch confirmed otherwise the afternoon before'},
+      {text:'Clock into ServiceTitan immediately upon arrival'},
+      {text:'Unload and dispose of previous day\'s trash from van'},
+      {text:'Check all jobs for the day — pull materials for every job at once'},
+      {text:'Review job scope before leaving — no surprises on site'},
+      {text:'Verify all materials and equipment with warehouse',note:'Alert manager immediately if anything is missing'},
+      {text:'Load everything into van in sequence of the day\'s jobs'},
+      {text:'Grab permit placard and yard sign for each job'},
+    ]}]},
+    {id:'hvac-clockout',title:'End of Day Clock-Out',desc:'Required procedure before leaving for the day.',duration:'10 min',manager:'Joe Bravata',steps_total:5,isNew:false,ts:2,phases:[{title:'End of day wrap-up',color:'gold',time:'End of shift',alerts:[{type:'warn',text:'30-minute meal break is required by law. If not yet taken, clock into meal break on the way home.'}],steps:[
+      {text:'Confirm invoice is complete, signed, and all photos uploaded before clocking out of the job'},
+      {text:'Complete job in ServiceTitan — then clock out of ServiceTitan'},
+      {text:'If before 5:00 PM — call dispatch to confirm you are done for the day'},
+      {text:'If after 5:00 PM — call your manager to confirm completion'},
+      {text:'30-minute meal break required — clock in and out on the way home if not yet taken'},
+    ]}]},
+  ]},
+  {id:'hvac-install',title:'HVAC Perfect Install',trade:'hvac',type:'Install',manager:'Aaron Matthews',desc:"Natal's complete standard for every HVAC system installation.",updated:'June 2026',isNew:true,topics:[
+    {id:'perfect-install',title:'Perfect Install SOP',desc:'End-to-end install procedure from morning prep through clock-out.',duration:'8–10 hrs',manager:'Aaron Matthews',steps_total:18,isNew:true,ts:3,phases:[
+      {title:'Arrival to jobsite',color:'teal',time:'On arrival',steps:[
+       {text:'Arrive to the job in ServiceTitan upon pulling up to the property'},
+       {text:'Greet customer — go over job expectations: layout, time frame, pertinent details'},
+       {text:'Set up drop cloths and prepare the home — keep things clean throughout'},
+       {text:'Verify equipment size will fit through all access points before unloading'},
+       {text:'WEAR BOOTIES',critical:true},
+      ]},
+      {title:'Required photos before closing out',color:'gold',time:'Before wrap-up',alerts:[{type:'warn',text:'All photos must be uploaded into ServiceTitan before the invoice is signed. No exceptions.'}],steps:[
+       {text:'Equipment model and serial number label — closeup, clearly legible'},
+       {text:'Full unit installed — both indoor and outdoor'},
+       {text:'Thermostat installed and set'},
+       {text:'Wide shots of all ductwork worked on — showing sealing and straps'},
+      ]},
+    ]},
+  ]},
+  {id:'csr-membership',title:'CSR Membership Scripts',trade:'csr',type:'Membership',manager:'Madison Allen',desc:'Golden Service Membership pitch and renewal call scripts.',updated:'June 2026',isNew:false,topics:[
+    {id:'csr-gsm-pitch',title:'GSM Membership Pitch',desc:'Full membership presentation for inbound callers.',duration:'2–4 min',manager:'Madison Allen',steps_total:4,isNew:false,ts:4,phases:[{title:'The pitch',color:'navy',time:'On call',steps:[
+      {text:'Introduce the Golden Service Membership at $249 per unit per year'},
+      {text:'Cover the benefits: priority scheduling, annual tune-ups, repair discounts'},
+      {text:'Never discount the membership price',critical:true},
+      {text:'Enter the membership in ServiceTitan and confirm payment'},
+    ]}]},
+  ]},
+];
+const SEED_PATHS=[
+  {role:'HVAC Field Path',trade:'hvac',color:'#1A3A5C',icon:'ti-wind',desc:'Every current HVAC procedure — acknowledge each to stay certified.',topicIds:['hvac-morning','hvac-clockout','perfect-install']},
+  {role:'CSR / Office Path',trade:'csr',color:'#3C3489',icon:'ti-headset',desc:'Every current CSR procedure — acknowledge each to stay certified.',topicIds:['csr-gsm-pitch']},
+];
+
+/* ── Boot: restore session if present, else show login ── */
+(function boot(){
+  buildUserSelect();
+  let saved=null;try{saved=JSON.parse(sessionStorage.getItem('gs_portal_session')||'null');}catch(e){}
+  if(saved&&saved.pass){
+    SESSION_PASSWORD=saved.pass;CU=USERS.find(u=>u.id===saved.uid)||USERS[0];DEMO=false;
+    document.getElementById('login-overlay').style.display='none';
+    loadProgress();initApp();
+  }else{
+    document.getElementById('login-pass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
+  }
+})();
+</script>
+</body>
+</html>
