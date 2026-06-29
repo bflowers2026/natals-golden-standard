@@ -774,7 +774,7 @@ async function loadLibrary() {
 async function checkEnvStatus() {
   const banner = document.getElementById('env-status-banner');
   try {
-    const res = await callClaude({ model:'claude-sonnet-4-6-20250514', max_tokens:10, messages:[{role:'user',content:'ping'}] });
+    const res = await callClaude({ model:'claude-sonnet-4-5', max_tokens:10, messages:[{role:'user',content:'ping'}] });
     if (res.content) {
       banner.innerHTML = '<div class="env-banner env-ok"><i class="ti ti-circle-check" aria-hidden="true"></i><div><strong>All systems connected.</strong> Anthropic API key is valid and working. Google Sheets proxy is active.</div></div>';
     } else {
@@ -913,7 +913,7 @@ RULES:
 
     // Call through Netlify proxy — key is server-side
     const data = await callClaude({
-      model: 'claude-sonnet-4-6-20250514',
+      model: 'claude-sonnet-4-5',
       max_tokens: 4000,
       messages: [{
         role: 'user',
@@ -1104,7 +1104,7 @@ async function checkConnections() {
 
   // Test Claude
   try {
-    const r = await callClaude({ model:'claude-sonnet-4-6-20250514', max_tokens:20, messages:[{role:'user',content:'Reply with the word OK only.'}] });
+    const r = await callClaude({ model:'claude-sonnet-4-5', max_tokens:20, messages:[{role:'user',content:'Reply with the word OK only.'}] });
     const hasContent = r && r.content && r.content.length > 0;
     results.push({ name:'Anthropic API (ANTHROPIC_API_KEY)', ok:hasContent, msg: hasContent ? 'Connected and responding' : 'No content returned: ' + JSON.stringify(r) });
   } catch(e) {
