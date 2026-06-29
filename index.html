@@ -313,9 +313,6 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);fon
       <div class="nav-divider"></div>
       <div class="nav-group">
         <div class="nav-label">Config</div>
-        <div class="nav-item" id="nav-team" onclick="showView('team',this,'Team')">
-          <i class="ti ti-users" aria-hidden="true"></i> Team
-        </div>
         <div class="nav-item" id="nav-env" onclick="showView('env',this,'Environment Variables')">
           <i class="ti ti-key" aria-hidden="true"></i> Keys & Config
         </div>
@@ -506,36 +503,6 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);fon
                 </button>
               </div>
               <div id="manage-list" style="padding:0"></div>
-            </div>
-          </div>
-        </div>
-
-        <!-- TEAM -->
-        <div id="view-team">
-          <div class="page" style="max-width:820px">
-            <h1>Team</h1>
-            <p class="page-sub">Manage who can sign in to the field portal. Changes appear in the portal's login picker right away.</p>
-            <div id="team-alert"></div>
-            <div class="card">
-              <div class="card-hdr"><i class="ti ti-user-plus" aria-hidden="true"></i> Add a technician</div>
-              <div class="card-body">
-                <div class="form-row">
-                  <div class="form-group"><label>Name *</label><input type="text" id="t-name" placeholder="e.g. Sam Rivera"/></div>
-                  <div class="form-group"><label>Role</label><input type="text" id="t-role" placeholder="e.g. HVAC Apprentice"/></div>
-                  <div class="form-group"><label>Trade</label><select id="t-trade"><option value="">Office / All</option><option value="hvac">HVAC</option><option value="plumbing">Plumbing</option><option value="electrical">Electrical</option><option value="csr">CSR / Office</option></select></div>
-                </div>
-                <div class="actions-row">
-                  <button class="btn-teal" id="t-add-btn" onclick="addTech()"><i class="ti ti-plus" style="font-size:13px" aria-hidden="true"></i> Add technician</button>
-                  <span class="status-msg">They sign in with the shared site password, then pick their name.</span>
-                </div>
-              </div>
-            </div>
-            <div class="card" style="overflow:hidden">
-              <div class="card-hdr" style="justify-content:space-between">
-                <span><i class="ti ti-users" style="font-size:15px;color:var(--teal);margin-right:8px" aria-hidden="true"></i>Technicians</span>
-                <button class="btn-icon" onclick="loadTeam()" title="Refresh"><i class="ti ti-refresh" style="font-size:13px" aria-hidden="true"></i></button>
-              </div>
-              <div id="team-list" style="padding:0"></div>
             </div>
           </div>
         </div>
@@ -807,7 +774,7 @@ async function loadLibrary() {
 async function checkEnvStatus() {
   const banner = document.getElementById('env-status-banner');
   try {
-    const res = await callClaude({ model:'claude-sonnet-4-5', max_tokens:10, messages:[{role:'user',content:'ping'}] });
+    const res = await callClaude({ model:'claude-sonnet-4-6-20250514', max_tokens:10, messages:[{role:'user',content:'ping'}] });
     if (res.content) {
       banner.innerHTML = '<div class="env-banner env-ok"><i class="ti ti-circle-check" aria-hidden="true"></i><div><strong>All systems connected.</strong> Anthropic API key is valid and working. Google Sheets proxy is active.</div></div>';
     } else {
@@ -946,7 +913,7 @@ RULES:
 
     // Call through Netlify proxy — key is server-side
     const data = await callClaude({
-      model: 'claude-sonnet-4-5',
+      model: 'claude-sonnet-4-6-20250514',
       max_tokens: 4000,
       messages: [{
         role: 'user',
@@ -1127,26 +1094,45 @@ async function checkConnections() {
 
   const results = [];
 
+  // Helper to safely stringify any error type
+  function errStr(e) {
+    if (!e) return 'Unknown error';
+    if (typeof e === 'string') return e;
+    if (e.message) return e.message;
+    try { return JSON.stringify(e); } catch(_) { return String(e); }
+  }
+
   // Test Claude
   try {
-    const r = await callClaude({ model:'claude-sonnet-4-5', max_tokens:10, messages:[{role:'user',content:'ping'}] });
-    results.push({ name:'Anthropic API (ANTHROPIC_API_KEY)', ok:!!r.content, msg: r.content ? 'Connected' : 'Invalid response' });
-  } catch(e) { results.push({ name:'Anthropic API (ANTHROPIC_API_KEY)', ok:false, msg:e.message }); }
+    const r = await callClaude({ model:'claude-sonnet-4-6-20250514', max_tokens:20, messages:[{role:'user',content:'Reply with the word OK only.'}] });
+    const hasContent = r && r.content && r.content.length > 0;
+    results.push({ name:'Anthropic API (ANTHROPIC_API_KEY)', ok:hasContent, msg: hasContent ? 'Connected and responding' : 'No content returned: ' + JSON.stringify(r) });
+  } catch(e) {
+    const msg = errStr(e);
+    const hint = msg.includes('ANTHROPIC_API_KEY') ? ' — Add this variable in Netlify Site configuration > Environment variables then trigger a new deploy.' :
+                 msg.includes('401') ? ' — API key may be invalid. Check console.anthropic.com.' :
+                 msg.includes('400') ? ' — Bad request. Model name or request format issue.' : '';
+    results.push({ name:'Anthropic API (ANTHROPIC_API_KEY)', ok:false, msg: msg + hint });
+  }
 
   // Test Sheet
   try {
     const r = await callSheet('GET');
-    results.push({ name:'Google Sheets (GOOGLE_SCRIPT_URL)', ok:Array.isArray(r), msg: Array.isArray(r) ? `Connected — ${r.length} SOPs in sheet` : 'Invalid response' });
-  } catch(e) { results.push({ name:'Google Sheets (GOOGLE_SCRIPT_URL)', ok:false, msg:e.message }); }
+    const ok = Array.isArray(r);
+    results.push({ name:'Google Sheets (GOOGLE_SCRIPT_URL)', ok, msg: ok ? 'Connected — ' + r.length + ' SOPs in sheet' : 'Unexpected response: ' + JSON.stringify(r).slice(0,100) });
+  } catch(e) {
+    const msg = errStr(e);
+    const hint = msg.includes('Unexpected token') || msg.includes('<') ? ' — The URL is returning HTML instead of JSON. Make sure your Apps Script is deployed as a Web App (not just saved) and the URL ends in /exec.' :
+                 msg.includes('GOOGLE_SCRIPT_URL') ? ' — Add this variable in Netlify environment variables then trigger a new deploy.' : '';
+    results.push({ name:'Google Sheets (GOOGLE_SCRIPT_URL)', ok:false, msg: msg + hint });
+  }
 
-  // Site password (implicit — if we're here, it worked)
+  // Site password
   results.push({ name:'Site Password (SITE_PASSWORD)', ok:true, msg:'Working — you are logged in' });
 
-  el.innerHTML = results.map(r => `
-    <div class="alert ${r.ok ? 'alert-success' : 'alert-err'}" style="margin-bottom:8px">
-      <i class="ti ti-${r.ok ? 'circle-check' : 'alert-circle'}" aria-hidden="true"></i>
-      <div><strong>${r.name}</strong><br>${r.msg}</div>
-    </div>`).join('');
+  el.innerHTML = results.map(r =>
+    '<div class="alert ' + (r.ok ? 'alert-success' : 'alert-err') + '" style="margin-bottom:8px"><i class="ti ti-' + (r.ok ? 'circle-check' : 'alert-circle') + '" aria-hidden="true"></i><div><strong>' + r.name + '</strong><br>' + r.msg + '</div></div>'
+  ).join('');
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -1160,57 +1146,6 @@ function showView(id, navEl, title) {
   document.getElementById('tb-crumb').textContent = 'Admin';
   document.getElementById('tb-sep').style.display = title ? 'inline' : 'none';
   document.getElementById('tb-page').textContent = title || '';
-  if (id === 'team') loadTeam();
-}
-
-/* TEAM — technician roster (Users tab, via the Apps Script) */
-const TEAM_TRADES={hvac:{label:'HVAC',color:'#1A3A5C'},plumbing:{label:'Plumbing',color:'#3B6D11'},electrical:{label:'Electrical',color:'#854F0B'},csr:{label:'CSR / Office',color:'#3C3489'}};
-let teamRoster=[];
-function teamAlert(type,msg){
-  const el=document.getElementById('team-alert');if(!type){el.innerHTML='';return;}
-  const icons={warn:'alert-triangle',success:'circle-check',info:'info-circle',err:'alert-circle'};
-  el.innerHTML=`<div class="alert alert-${type}" style="margin-bottom:16px"><i class="ti ti-${icons[type]||'info-circle'}" aria-hidden="true"></i><div>${msg}</div></div>`;
-  if(type==='success')setTimeout(()=>{const e=document.getElementById('team-alert');if(e)e.innerHTML='';},4000);
-}
-async function loadTeam(){
-  const list=document.getElementById('team-list');
-  list.innerHTML='<div style="padding:18px;text-align:center;color:var(--text3);font-family:\'Source Sans 3\',sans-serif">Loading…</div>';
-  try{
-    const data=await callSheet('POST',{action:'listUsers'});
-    teamRoster=Array.isArray(data)?data:[];
-    renderTeam();
-  }catch(e){
-    list.innerHTML='<div style="padding:18px;text-align:center;color:var(--red);font-family:\'Source Sans 3\',sans-serif">Couldn\'t load the team — '+esc(e.message)+'<br><span style="color:var(--text3)">Make sure the updated Apps Script (with the Users tab) is deployed.</span></div>';
-  }
-}
-function renderTeam(){
-  const el=document.getElementById('team-list');
-  if(!teamRoster.length){el.innerHTML='<div style="padding:24px;text-align:center;color:var(--text3);font-family:\'Source Sans 3\',sans-serif">No technicians yet. Add one above — they\'ll appear in the portal login.</div>';return;}
-  el.innerHTML=teamRoster.map(u=>{
-    const tc=TEAM_TRADES[String(u.trade||'').toLowerCase()];
-    const color=tc?tc.color:'#999';const tlabel=tc?tc.label:'Office / All';
-    return `<div class="sop-list-item"><span class="sli-dot" style="background:${color}"></span><div style="flex:1"><div class="sli-title">${esc(u.name)}</div><div class="sli-meta">${tlabel}${u.role?' · '+esc(u.role):''}</div></div><div class="sli-actions"><button class="btn-icon danger" title="Remove" onclick="removeTech('${esc(u.id)}')"><i class="ti ti-trash" style="font-size:13px" aria-hidden="true"></i></button></div></div>`;
-  }).join('');
-}
-async function addTech(){
-  const name=document.getElementById('t-name').value.trim();
-  const role=document.getElementById('t-role').value.trim();
-  const trade=document.getElementById('t-trade').value;
-  if(!name){teamAlert('warn','Enter a name for the technician.');return;}
-  const id=name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'')+'-'+String(Date.now()).slice(-4);
-  const btn=document.getElementById('t-add-btn');btn.disabled=true;
-  try{
-    await callSheet('POST',{action:'upsertUser',row:{id,name,role,trade,active:'TRUE'}});
-    document.getElementById('t-name').value='';document.getElementById('t-role').value='';document.getElementById('t-trade').selectedIndex=0;
-    teamAlert('success','Added '+esc(name)+'. They can now sign in to the portal.');
-    await loadTeam();
-  }catch(e){teamAlert('err','Could not add: '+esc(e.message));}
-  btn.disabled=false;
-}
-async function removeTech(id){
-  if(!confirm('Remove this technician? They will no longer be able to sign in.'))return;
-  try{await callSheet('POST',{action:'deleteUser',id});teamAlert('success','Technician removed.');await loadTeam();}
-  catch(e){teamAlert('err','Could not remove: '+esc(e.message));}
 }
 
 /* ════════════════════════════════════════════════════════════
