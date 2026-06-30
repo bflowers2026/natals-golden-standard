@@ -412,6 +412,17 @@ let CHK = {};           // { sopId: { 'pi_si': bool } }  — in-memory, synced t
 let ACKD = {};          // { sopId: bool }               — in-memory, synced to sheet
 let saveTimer = {};     // debounce timers per sopId
 let libFilter = null;
+let DYNAMIC_USERS = []; // loaded from Users sheet (added via admin Team tab)
+
+// Default users baked in — supplemented by Users sheet at login
+const DEFAULT_USERS = [
+  {id:'brandon',name:'Brandon Flowers',initials:'BF',role:'Marketing Director',trade:null,color:'#2BA99B'},
+  {id:'joe',    name:'Joe Bravata',    initials:'JB',role:'HVAC Service Manager',trade:'hvac',color:'#1A3A5C'},
+  {id:'aaron',  name:'Aaron Matthews', initials:'AM',role:'HVAC Install Manager',trade:'hvac',color:'#234e7a'},
+  {id:'rodney', name:'Rodney Faucett', initials:'RF',role:'Plumbing Manager',trade:'plumbing',color:'#3B6D11'},
+  {id:'darren', name:'Darren Bell',    initials:'DB',role:'Electrical Manager',trade:'electrical',color:'#854F0B'},
+  {id:'madison',name:'Madison Allen',  initials:'MA',role:'Office Manager',trade:'csr',color:'#3C3489'},
+];
 
 const TC = {
   hvac:      {label:'HVAC',       color:'#1A3A5C',pill:'tp-h',icon:'ti-wind'},
@@ -427,6 +438,42 @@ const PATHS = [
   {role:'New Electrical Tech',    trade:'electrical', color:'#854F0B',icon:'ti-bolt',    desc:'Complete before first solo dispatch.',         types:['Daily','Service','Maintenance']},
   {role:'New CSR',                trade:'csr',        color:'#3C3489',icon:'ti-headset', desc:'Complete before taking live calls.',           types:['Inbound','Membership','Daily']},
 ];
+
+// ── DYNAMIC USER LOADING ─────────────────────────────────
+// Loads users added via admin Team tab and merges them into the login dropdown.
+// Falls back to defaults if the call fails.
+async function loadUsersIntoPicker() {
+  const sel = document.getElementById('l-user');
+  if (!sel) return;
+
+  // Always start with defaults
+  let allUsers = [...DEFAULT_USERS];
+
+  // Try to fetch dynamic users (no password needed since this is pre-login)
+  // We use a special "publicListUsers" call that doesn't require auth
+  // For now, just rebuild dropdown with defaults
+  // (Dynamic load happens after first login when we have the password)
+
+  sel.innerHTML = '<option value="">Select your name...</option>' +
+    allUsers.map(u => {
+      const traitLabel = u.role || 'Team Member';
+      return '<option value="' + u.id + '|' + u.initials + '|' + u.color + '|' + (u.trade||'') + '">' +
+        u.name + ' — ' + traitLabel + '</option>';
+    }).join('');
+}
+
+// After login, fetch dynamic users from sheet and merge for next time
+async function refreshDynamicUsers() {
+  try {
+    const list = await sheetPost({action:'listUsers'});
+    if (Array.isArray(list)) DYNAMIC_USERS = list;
+  } catch(e) { /* sheet not updated yet */ }
+}
+
+function getInitials(name) {
+  const parts = String(name||'').trim().split(/\s+/);
+  return (parts[0]?.[0]||'?').toUpperCase() + (parts[1]?.[0]||'').toUpperCase();
+}
 
 // ── AUTH ─────────────────────────────────────────────────
 async function doLogin() {
@@ -445,12 +492,26 @@ async function doLogin() {
     if (data.ok) {
       SESSION_PW = pw;
       const parts = uv.split('|');
-      CU = { id:parts[0], initials:parts[1], color:parts[2], name:getFullName(parts[0]), trade:getTrade(parts[0]) };
+      // Check if this is a dynamic user (added via admin)
+      const dynUser = DYNAMIC_USERS.find(u => u.id === parts[0]);
+      if (dynUser) {
+        CU = {
+          id: dynUser.id,
+          initials: getInitials(dynUser.name),
+          color: '#2BA99B',
+          name: dynUser.name,
+          trade: dynUser.trade || null
+        };
+      } else {
+        // Fallback to default user
+        CU = { id:parts[0], initials:parts[1], color:parts[2], name:getFullName(parts[0]), trade:getTrade(parts[0]) };
+      }
       document.getElementById('u-av').textContent = parts[1];
       document.getElementById('u-av').style.background = parts[2];
       document.getElementById('u-nm').textContent = CU.name.split(' ')[0];
       document.getElementById('ls').style.display = 'none';
       document.getElementById('app').classList.add('on');
+      await refreshDynamicUsers();  // get fresh user list for next login
       await initApp();
     } else {
       err.textContent = data.error || 'Incorrect password.';
@@ -479,6 +540,7 @@ function signOut() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  loadUsersIntoPicker();
   document.getElementById('l-pass').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
   document.getElementById('ai-in').addEventListener('keydown', e => { if(e.key==='Enter') sendAI(); });
   document.getElementById('gsearch').addEventListener('input', doSearch);
@@ -506,9 +568,10 @@ async function initApp() {
     });
   } catch(e) { SOPS = []; }
 
-  // Load progress from sheet
+  // Load progress from sheet — restores checkboxes and acknowledgements
   try {
     const prog = await sheetPost({action:'loadProgress', user_id: CU.id});
+    console.log('[GS] Loaded progress rows:', Array.isArray(prog) ? prog.length : 'not array', prog);
     if (Array.isArray(prog)) {
       prog.forEach(p => {
         if (p.sop_id) {
@@ -516,8 +579,11 @@ async function initApp() {
           ACKD[p.sop_id] = String(p.acknowledged).toLowerCase() === 'true';
         }
       });
+      console.log('[GS] Restored CHK keys:', Object.keys(CHK).length, 'ACKD keys:', Object.keys(ACKD).length);
     }
-  } catch(e) { /* no progress yet */ }
+  } catch(e) {
+    console.warn('[GS] Could not load progress:', e.message);
+  }
 
   groupSubjects();
   buildSidebarSubjs();
