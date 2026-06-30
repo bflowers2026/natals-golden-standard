@@ -313,6 +313,9 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);fon
       <div class="nav-divider"></div>
       <div class="nav-group">
         <div class="nav-label">Config</div>
+        <div class="nav-item" id="nav-team" onclick="showView('team',this,'Team')">
+          <i class="ti ti-users" aria-hidden="true"></i> Team
+        </div>
         <div class="nav-item" id="nav-env" onclick="showView('env',this,'Environment Variables')">
           <i class="ti ti-key" aria-hidden="true"></i> Keys & Config
         </div>
@@ -503,6 +506,37 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);fon
                 </button>
               </div>
               <div id="manage-list" style="padding:0"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TEAM -->
+        <div id="view-team">
+          <div class="page" style="max-width:820px">
+            <h1>Team</h1>
+            <p class="page-sub">Manage who can sign in to the field portal. Changes appear in the portal's login picker right away.</p>
+            <div id="team-alert"></div>
+            <div class="card">
+              <div class="card-hdr"><i class="ti ti-user-plus" aria-hidden="true"></i> Add a technician</div>
+              <div class="card-body">
+                <div class="form-row">
+                  <div class="form-group"><label>Name *</label><input type="text" id="t-name" placeholder="e.g. Sam Rivera"/></div>
+                  <div class="form-group"><label>Role</label><input type="text" id="t-role" placeholder="e.g. HVAC Apprentice"/></div>
+                  <div class="form-group"><label>Trade</label><select id="t-trade"><option value="">Office / All</option><option value="hvac">HVAC</option><option value="plumbing">Plumbing</option><option value="electrical">Electrical</option><option value="csr">CSR / Office</option></select></div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group"><label>Reports to (manager)</label><select id="t-manager"><option value="">None</option><option value="joe">Joe Bravata — HVAC Service</option><option value="aaron">Aaron Matthews — HVAC Install</option><option value="rodney">Rodney Faucett — Plumbing</option><option value="darren">Darren Bell — Electrical</option><option value="madison">Madison Allen — Office</option></select></div>
+                  <div class="form-group"><label>&nbsp;</label><div class="actions-row" style="margin-top:0"><button class="btn-teal" id="t-add-btn" onclick="addTech()"><i class="ti ti-plus" style="font-size:13px" aria-hidden="true"></i> Add technician</button></div></div>
+                </div>
+                <p class="status-msg" style="margin-top:6px">Technicians sign in with the shared site password, then pick their name on the portal.</p>
+              </div>
+            </div>
+            <div class="card" style="overflow:hidden">
+              <div class="card-hdr" style="justify-content:space-between">
+                <span><i class="ti ti-users" style="font-size:15px;color:var(--teal);margin-right:8px" aria-hidden="true"></i>Technicians</span>
+                <button class="btn-icon" onclick="loadTeam()" title="Refresh"><i class="ti ti-refresh" style="font-size:13px" aria-hidden="true"></i></button>
+              </div>
+              <div id="team-list" style="padding:0"></div>
             </div>
           </div>
         </div>
@@ -1146,6 +1180,90 @@ function showView(id, navEl, title) {
   document.getElementById('tb-crumb').textContent = 'Admin';
   document.getElementById('tb-sep').style.display = title ? 'inline' : 'none';
   document.getElementById('tb-page').textContent = title || '';
+  if (id === 'team') loadTeam();
+}
+
+/* ════════════════════════════════════════════════════════════
+   TEAM — technician roster (Users tab, via Apps Script)
+   ════════════════════════════════════════════════════════════ */
+const TEAM_TRADES = {
+  hvac:       {label:'HVAC',        color:'#1A3A5C'},
+  plumbing:   {label:'Plumbing',    color:'#3B6D11'},
+  electrical: {label:'Electrical',  color:'#854F0B'},
+  csr:        {label:'CSR / Office',color:'#3C3489'},
+};
+const MANAGER_NAMES = {
+  joe:'Joe Bravata', aaron:'Aaron Matthews', rodney:'Rodney Faucett',
+  darren:'Darren Bell', madison:'Madison Allen', brandon:'Brandon Flowers'
+};
+let teamRoster = [];
+
+function teamAlert(type, msg) {
+  const el = document.getElementById('team-alert');
+  if (!type) { el.innerHTML = ''; return; }
+  const icons = {warn:'alert-triangle',success:'circle-check',info:'info-circle',err:'alert-circle'};
+  el.innerHTML = '<div class="alert alert-' + type + '" style="margin-bottom:16px"><i class="ti ti-' + (icons[type]||'info-circle') + '" aria-hidden="true"></i><div>' + msg + '</div></div>';
+  if (type === 'success') setTimeout(() => { const e = document.getElementById('team-alert'); if (e) e.innerHTML = ''; }, 4000);
+}
+
+async function loadTeam() {
+  const list = document.getElementById('team-list');
+  list.innerHTML = '<div style="padding:18px;text-align:center;color:var(--text3);font-family:\'Source Sans 3\',sans-serif">Loading…</div>';
+  try {
+    const data = await callSheet('POST', { action: 'listUsers' });
+    teamRoster = Array.isArray(data) ? data : [];
+    renderTeam();
+  } catch (e) {
+    list.innerHTML = '<div style="padding:18px;text-align:center;color:var(--red);font-family:\'Source Sans 3\',sans-serif">Couldn\'t load team — ' + esc(e.message) + '<br><span style="color:var(--text3);font-size:11px">Make sure your Apps Script is updated to v2 and a NEW deployment was created (Deploy > New deployment, not Edit).</span></div>';
+  }
+}
+
+function renderTeam() {
+  const el = document.getElementById('team-list');
+  if (!teamRoster.length) {
+    el.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text3);font-family:\'Source Sans 3\',sans-serif">No technicians yet. Add one above — they will appear in the portal login picker.</div>';
+    return;
+  }
+  el.innerHTML = teamRoster.map(u => {
+    const tc = TEAM_TRADES[String(u.trade||'').toLowerCase()];
+    const color = tc ? tc.color : '#999';
+    const tlabel = tc ? tc.label : 'Office / All';
+    const mgr = u.manager ? (MANAGER_NAMES[u.manager] || u.manager) : '';
+    return '<div class="sop-list-item"><span class="sli-dot" style="background:' + color + '"></span><div style="flex:1"><div class="sli-title">' + esc(u.name) + '</div><div class="sli-meta">' + tlabel + (u.role ? ' · ' + esc(u.role) : '') + (mgr ? ' · Reports to ' + esc(mgr) : '') + '</div></div><div class="sli-actions"><button class="btn-icon danger" title="Remove" onclick="removeTech(\'' + esc(u.id) + '\')"><i class="ti ti-trash" style="font-size:13px" aria-hidden="true"></i></button></div></div>';
+  }).join('');
+}
+
+async function addTech() {
+  const name  = document.getElementById('t-name').value.trim();
+  const role  = document.getElementById('t-role').value.trim();
+  const trade = document.getElementById('t-trade').value;
+  const mgr   = document.getElementById('t-manager').value;
+  if (!name) { teamAlert('warn', 'Enter a name for the technician.'); return; }
+  const id = name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'') + '-' + String(Date.now()).slice(-4);
+  const btn = document.getElementById('t-add-btn'); btn.disabled = true;
+  try {
+    await callSheet('POST', { action:'upsertUser', row:{ id, name, role, trade, manager: mgr, active:'TRUE' } });
+    document.getElementById('t-name').value = '';
+    document.getElementById('t-role').value = '';
+    document.getElementById('t-trade').selectedIndex = 0;
+    document.getElementById('t-manager').selectedIndex = 0;
+    teamAlert('success', 'Added ' + esc(name) + '. They can now sign in to the portal.');
+    await loadTeam();
+  } catch (e) {
+    teamAlert('err', 'Could not add: ' + esc(e.message));
+  }
+  btn.disabled = false;
+}
+
+async function removeTech(id) {
+  if (!confirm('Remove this technician? They will no longer be able to sign in to the portal.')) return;
+  try {
+    await callSheet('POST', { action:'deleteUser', id });
+    teamAlert('success', 'Technician removed.');
+    await loadTeam();
+  } catch (e) {
+    teamAlert('err', 'Could not remove: ' + esc(e.message));
+  }
 }
 
 /* ════════════════════════════════════════════════════════════
